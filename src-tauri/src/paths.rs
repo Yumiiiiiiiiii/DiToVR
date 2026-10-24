@@ -1,27 +1,21 @@
-use discord_vr_core::config;
+use ditovr_core::config;
 use std::{io, path::Path};
 
-pub const CONFIG_DIRECTORY: &str = "discord-to-vr";
+pub const CONFIG_DIRECTORY: &str = "DiToVR";
+pub const PREVIOUS_CONFIG_DIRECTORY: &str = "discord-to-vr";
 
 /// Prefer the previous per-user settings over an older portable copy.
 /// Migration errors must not fall back to an unrelated account configuration.
-pub fn migrate_config(
-    destination: &Path,
-    previous_user_config: &Path,
-    portable_config: &Path,
-) -> io::Result<bool> {
+pub fn migrate_config(destination: &Path, sources: &[&Path]) -> io::Result<bool> {
     if destination.try_exists()? {
         return Ok(false);
     }
-    let source = if previous_user_config.try_exists()? {
-        previous_user_config
-    } else {
-        portable_config
-    };
-    if !source.try_exists()? {
-        return Ok(false);
+    for source in sources {
+        if source.try_exists()? {
+            return config::migrate_config_at(source, destination);
+        }
     }
-    config::migrate_config_at(source, destination)
+    Ok(false)
 }
 
 #[cfg(test)]
@@ -44,6 +38,7 @@ mod tests {
         ));
         fs::create_dir(&dir).unwrap();
         let previous = dir.join("previous.json");
+        let older = dir.join("older.json");
         let portable = dir.join("portable.json");
         let destination = dir.join("destination.json");
         let document = |id: &str| {
@@ -54,12 +49,13 @@ mod tests {
         };
         let original = serde_json::to_vec(&document("123456789")).unwrap();
         fs::write(&previous, &original).unwrap();
+        fs::write(&older, serde_json::to_vec(&document("222222222")).unwrap()).unwrap();
         fs::write(
             &portable,
             serde_json::to_vec(&document("987654321")).unwrap(),
         )
         .unwrap();
-        assert!(migrate_config(&destination, &previous, &portable).unwrap());
+        assert!(migrate_config(&destination, &[&previous, &older, &portable]).unwrap());
         let migrated = config::load_from_path(&destination, false).unwrap();
         assert_eq!(migrated.client_id, "123456789");
         assert_eq!(migrated.access_token, "synthetic-access");
@@ -73,13 +69,22 @@ mod tests {
             .unwrap()
             .starts_with("dpapi:v1:"));
         fs::write(&previous, b"{invalid").unwrap();
-        assert!(!migrate_config(&destination, &previous, &portable).unwrap());
+        assert!(!migrate_config(&destination, &[&previous, &portable]).unwrap());
         assert_eq!(fs::read(&destination).unwrap(), saved);
         fs::remove_file(&destination).unwrap();
-        assert!(migrate_config(&destination, &previous, &portable).is_err());
+        assert!(migrate_config(&destination, &[&previous, &older, &portable]).is_err());
         assert!(!destination.exists());
         fs::remove_file(&previous).unwrap();
-        assert!(migrate_config(&destination, &previous, &portable).unwrap());
+        assert!(migrate_config(&destination, &[&previous, &older, &portable]).unwrap());
+        assert_eq!(
+            config::load_from_path(&destination, false)
+                .unwrap()
+                .client_id,
+            "222222222"
+        );
+        fs::remove_file(&destination).unwrap();
+        fs::remove_file(&older).unwrap();
+        assert!(migrate_config(&destination, &[&previous, &portable]).unwrap());
         assert_eq!(
             config::load_from_path(&destination, false)
                 .unwrap()

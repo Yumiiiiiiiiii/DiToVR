@@ -147,7 +147,10 @@ export async function api<T>(
   // Browser preview is isolated: it never accesses files, accounts or services.
   switch (command) {
     case "preview_theme": return undefined as T;
-    case "get_update_status": return {currentVersion:"0.2.1",autoUpdate:previewAutoUpdate,supported:false,canCheck:false,disabledReason:"画面プレビューでは更新の通信・適用を行いません。",phase:"idle",version:null,notes:null,downloaded:0,total:null,checkedAtMs:null,message:null} as T;
+    case "get_update_status": {
+      const storeManaged=new URLSearchParams(location.search).get("distribution")==="store";
+      return {currentVersion:"0.2.1",storeManaged,autoUpdate:storeManaged?false:previewAutoUpdate,supported:false,canCheck:false,disabledReason:storeManaged?"このアプリの更新は Microsoft Store が管理します。Microsoft Store の「ライブラリ」で更新を確認できます。":"画面プレビューでは更新の通信・適用を行いません。",phase:"idle",version:null,notes:null,downloaded:0,total:null,checkedAtMs:null,message:null} as T;
+    }
     case "set_auto_update": previewAutoUpdate=Boolean(args?.enabled); return undefined as T;
     case "check_updates": throw "画面プレビューでは更新の通信・適用を行いません。";
     case "get_debug_snapshot": return structuredClone(previewDebug) as T;

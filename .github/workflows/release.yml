@@ -12,7 +12,7 @@ jobs:
   build-and-release:
     runs-on: windows-latest
     concurrency:
-      group: discord-to-vr-${{ github.ref_type == 'tag' && 'stable-release' || github.ref }}
+      group: ditovr-${{ github.ref_type == 'tag' && 'stable-release' || github.ref }}
       cancel-in-progress: false
     permissions:
       contents: write
@@ -42,6 +42,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/publish-update-feed.mjs --plan
+      - name: Audit stable release dependencies
+        if: github.ref_type == 'tag'
+        run: ./scripts/audit-release-dependencies.ps1
       - uses: actions/cache@v4
         with:
           path: |
@@ -58,8 +61,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --manifest-path src-tauri/Cargo.toml --locked --features custom-protocol
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs
-      - name: Build signed release
+          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs
+      - name: Build release with updater signatures
         if: github.ref_type == 'tag'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -78,14 +81,32 @@ jobs:
           [IO.File]::WriteAllText($override, '{"bundle":{"createUpdaterArtifacts":false}}')
           npm run desktop:build -- --ci --config $override -- --locked
       - name: Verify uninstall data cleanup
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-hooks.ps1
+        run: |
+          ./scripts/test-installer-hooks.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./scripts/test-installer-rename.ps1
+      - name: Scan stable release files with Microsoft Defender
+        if: github.ref_type == 'tag'
+        run: |
+          Update-MpSignature -ErrorAction Stop
+          ./scripts/check-release-security.ps1 -Files @(
+            'target/tauri/release/DiToVR.exe',
+            'target/tauri/release/bundle/nsis/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe'
+          ) -ReportPath (Join-Path $env:RUNNER_TEMP 'ditovr-security.json')
+      - name: Save release security report
+        if: always() && github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ditovr-security
+          path: ${{ runner.temp }}/ditovr-security.json
+          if-no-files-found: warn
       - name: Save build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: discord-to-vr-windows
+          name: ditovr-windows
           path: |
-            target/tauri/release/bundle/nsis/Discord to VR_${{ steps.release-version.outputs.version }}_x64-setup.exe
-            target/tauri/release/bundle/nsis/Discord to VR_${{ steps.release-version.outputs.version }}_x64-setup.exe.sig
+            target/tauri/release/bundle/nsis/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe
+            target/tauri/release/bundle/nsis/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe.sig
             latest.json
       - name: Publish stable GitHub release
         if: github.ref_type == 'tag'

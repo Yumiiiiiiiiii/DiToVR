@@ -2,7 +2,7 @@
 mod app;
 mod paths;
 mod updater;
-use discord_vr_core::{config, system};
+use ditovr_core::{config, system};
 use tauri::Manager;
 
 fn main() {
@@ -10,7 +10,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help") {
         system::attach_console();
-        println!("Discord → VR (Tauri)\n--setup: 設定を開く\n--privacy / --normal: 表示モードを指定\n-debug / --debug: XSOverlay を使わない Discord 受信診断とダミーテスト\n--ui-preview: 接続しない画面プレビュー\n×でトレイへ収納。停止は「終了」。");
+        println!("DiToVR (Tauri)\n--setup: 設定を開く\n--privacy / --normal: 表示モードを指定\n-debug / --debug: XSOverlay を使わない Discord 受信診断とダミーテスト\n--ui-preview: 接続しない画面プレビュー\n×でトレイへ収納。停止は「終了」。");
         return;
     }
     let preview = args.iter().any(|a| a == "--ui-preview");
@@ -73,17 +73,18 @@ fn main() {
             let handle = host.handle().clone();
             let directory = handle.path().config_dir()?.join(paths::CONFIG_DIRECTORY);
             let previous_directory = handle.path().app_config_dir()?;
+            let renamed_directory = handle.path().config_dir()?.join(paths::PREVIOUS_CONFIG_DIRECTORY);
             let path = directory.join("config.json");
             let mut migration_problem = None;
             let mut update_migration_failed = false;
             if !preview {
                 std::fs::create_dir_all(&directory)?;
                 let legacy = config::get_config_path();
-                if paths::migrate_config(&path, &previous_directory.join("config.json"), &legacy).is_err() {
+                if paths::migrate_config(&path, &[&renamed_directory.join("config.json"), &previous_directory.join("config.json"), &legacy]).is_err() {
                     migration_problem = Some("旧設定を移行できませんでした。以前の AppData フォルダー、実行ファイルと同じフォルダーの config.json、新しい保存先を確認してください。旧ファイルは変更していません。".into());
                 }
-                update_migration_failed = updater::migrate_preferences(
-                    &previous_directory.join("updates.json"), &directory.join("updates.json"),
+                update_migration_failed = updater::migrate_preferences_from(
+                    &[&renamed_directory.join("updates.json"), &previous_directory.join("updates.json")], &directory.join("updates.json"),
                 ).is_err();
                 config::set_config_path(path.clone())?;
             }

@@ -9,7 +9,8 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 const CHECK_INTERVAL: Duration = Duration::from_secs(12 * 60 * 60);
-const REPOSITORY_PATH: &str = "/Yumiiiiiiiiii/discord_To_VR/releases/download/";
+const REPOSITORY_PATH: &str = "/Yumiiiiiiiiii/DiToVR/releases/download/";
+const LEGACY_REPOSITORY_PATH: &str = "/Yumiiiiiiiiii/discord_To_VR/releases/download/";
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -27,6 +28,7 @@ pub enum Phase {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateStatus {
     current_version: String,
+    store_managed: bool,
     pub auto_update: bool,
     supported: bool,
     can_check: bool,
@@ -54,8 +56,13 @@ pub struct UpdateManager {
 }
 impl UpdateManager {
     pub fn new(path: PathBuf, preview: bool, debug: bool) -> Self {
-        let network_enabled = !preview && !debug && !cfg!(debug_assertions);
-        let (auto_update, problem) = if preview {
+        Self::with_distribution(path, preview, debug, store_managed())
+    }
+    fn with_distribution(path: PathBuf, preview: bool, debug: bool, store_managed: bool) -> Self {
+        let network_enabled = !store_managed && !preview && !debug && !cfg!(debug_assertions);
+        let (auto_update, problem) = if store_managed {
+            (false, None)
+        } else if preview {
             (true, None)
         } else {
             match std::fs::read(&path) {
@@ -68,7 +75,9 @@ impl UpdateManager {
             }
         };
         let supported = network_enabled && installed_executable();
-        let disabled_reason = if preview {
+        let disabled_reason = if store_managed {
+            Some("このアプリの更新は Microsoft Store が管理します。Microsoft Store の「ライブラリ」で更新を確認できます。".into())
+        } else if preview {
             Some("画面プレビューでは更新の通信・適用を行いません。".into())
         } else if debug {
             Some("-debug では Discord の受信テストだけを行います。更新は通常起動で確認してください。".into())
@@ -85,6 +94,7 @@ impl UpdateManager {
         Self {
             status: Arc::new(Mutex::new(UpdateStatus {
                 current_version: env!("CARGO_PKG_VERSION").into(),
+                store_managed,
                 auto_update,
                 supported,
                 can_check: network_enabled,
@@ -113,6 +123,9 @@ impl UpdateManager {
             .clone()
     }
     pub fn report_migration_failure(&self) {
+        if self.snapshot().store_managed {
+            return;
+        }
         self.mutate(|s| {
             s.auto_update = false;
             s.phase = Phase::Error;
@@ -126,6 +139,9 @@ impl UpdateManager {
         });
     }
     fn save_preference(&self, enabled: bool) -> Result<(), String> {
+        if self.snapshot().store_managed {
+            return Err("更新の設定は Microsoft Store で変更してください。".into());
+        }
         let _write = self
             .preference_write
             .lock()
@@ -149,6 +165,33 @@ impl UpdateManager {
         self.mutate(|s| s.auto_update = enabled);
         Ok(())
     }
+}
+
+/// Package identity also protects an MSIX built outside our Store build command.
+/// An unexpected API failure must never enable the NSIS updater in a package.
+fn store_managed() -> bool {
+    use windows_sys::Win32::{
+        Foundation::APPMODEL_ERROR_NO_PACKAGE, Storage::Packaging::Appx::GetCurrentPackageFullName,
+    };
+    let mut length = 0;
+    cfg!(feature = "microsoft-store")
+        || unsafe { GetCurrentPackageFullName(&mut length, std::ptr::null_mut()) }
+            != APPMODEL_ERROR_NO_PACKAGE
+}
+
+pub fn migrate_preferences_from(
+    sources: &[&std::path::Path],
+    destination: &std::path::Path,
+) -> std::io::Result<bool> {
+    if destination.try_exists()? {
+        return Ok(false);
+    }
+    for source in sources {
+        if source.try_exists()? {
+            return migrate_preferences(source, destination);
+        }
+    }
+    Ok(false)
 }
 
 pub fn migrate_preferences(
@@ -195,7 +238,7 @@ fn replace_preference(from: &std::path::Path, to: &std::path::Path) -> std::io::
 /// NSIS remembers the actual installation directory. Never install from a copied ZIP executable.
 fn installed_executable() -> bool {
     use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_SZ};
-    let key: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Discord to VR\0"
+    let key: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\DiToVR\0"
         .encode_utf16()
         .collect();
     let value: Vec<u16> = "InstallLocation\0".encode_utf16().collect();
@@ -217,7 +260,7 @@ fn installed_executable() -> bool {
     }
     let end = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
     let installed = PathBuf::from(String::from_utf16_lossy(&buffer[..end]).trim_matches('"'))
-        .join("discord_To_VR.exe");
+        .join("DiToVR.exe");
     match (
         installed.canonicalize(),
         std::env::current_exe().and_then(|p| p.canonicalize()),
@@ -235,7 +278,8 @@ fn allowed_download(url: &reqwest::Url) -> bool {
         && url.password().is_none()
         && url.query().is_none()
         && url.fragment().is_none()
-        && url.path().starts_with(REPOSITORY_PATH)
+        && (url.path().starts_with(REPOSITORY_PATH)
+            || url.path().starts_with(LEGACY_REPOSITORY_PATH))
         && url.path().ends_with("-setup.exe")
 }
 
@@ -370,6 +414,44 @@ mod signed_download_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "microsoft-store")]
+    #[test]
+    fn store_build_blocks_nsis_even_when_launched_without_package_identity() {
+        let manager = UpdateManager::new(
+            std::env::temp_dir().join("unused-store-updates.json"),
+            false,
+            false,
+        );
+        assert!(manager.snapshot().store_managed);
+        assert!(!manager.network_enabled);
+        assert!(manager.save_preference(true).is_err());
+    }
+    #[test]
+    fn store_distribution_never_enables_github_updates_or_changes_preferences() {
+        let dir =
+            std::env::temp_dir().join(format!("discord-vr-store-update-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("updates.json");
+        let original = br#"{"auto_update":true}"#;
+        std::fs::write(&path, original).unwrap();
+        for (preview, debug) in [(false, false), (true, false), (false, true)] {
+            let manager = UpdateManager::with_distribution(path.clone(), preview, debug, true);
+            let status = manager.snapshot();
+            assert!(status.store_managed);
+            assert!(
+                !manager.network_enabled
+                    && !status.can_check
+                    && !status.supported
+                    && !status.auto_update
+            );
+            assert!(manager.save_preference(true).is_err());
+            manager.report_migration_failure();
+            assert!(manager.snapshot().message.is_none());
+            assert_eq!(std::fs::read(&path).unwrap(), original);
+        }
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(dir).unwrap();
+    }
     #[test]
     fn preference_migration_preserves_opt_out_and_does_not_enable_updates_on_failure() {
         let dir = std::env::temp_dir().join(format!(
@@ -382,42 +464,46 @@ mod tests {
         ));
         std::fs::create_dir(&dir).unwrap();
         let previous = dir.join("previous.json");
+        let older = dir.join("older.json");
         let destination = dir.join("updates.json");
         let original = br#"{"auto_update":false}"#;
         std::fs::write(&previous, original).unwrap();
-        assert!(migrate_preferences(&previous, &destination).unwrap());
+        std::fs::write(&older, br#"{"auto_update":true}"#).unwrap();
+        assert!(migrate_preferences_from(&[&previous, &older], &destination).unwrap());
         assert_eq!(std::fs::read(&previous).unwrap(), original);
         assert!(
-            !UpdateManager::new(destination.clone(), false, false)
+            !UpdateManager::with_distribution(destination.clone(), false, false, false)
                 .snapshot()
                 .auto_update
         );
         std::fs::write(&destination, br#"{"auto_update":true}"#).unwrap();
         assert!(!migrate_preferences(&previous, &destination).unwrap());
         assert!(
-            UpdateManager::new(destination.clone(), false, false)
+            UpdateManager::with_distribution(destination.clone(), false, false, false)
                 .snapshot()
                 .auto_update
         );
         std::fs::remove_file(&destination).unwrap();
         std::fs::write(&previous, b"{invalid").unwrap();
-        assert!(migrate_preferences(&previous, &destination).is_err());
+        assert!(migrate_preferences_from(&[&previous, &older], &destination).is_err());
         assert!(!destination.exists());
-        let manager = UpdateManager::new(destination, false, false);
+        let manager = UpdateManager::with_distribution(destination, false, false, false);
         manager.report_migration_failure();
         assert!(!manager.snapshot().auto_update);
         assert!(manager.snapshot().phase == Phase::Error);
         std::fs::remove_file(previous).unwrap();
+        std::fs::remove_file(older).unwrap();
         std::fs::remove_dir(dir).unwrap();
     }
     #[test]
     fn update_urls_only_allow_this_repositories_https_installers() {
-        assert!(allowed_download(&reqwest::Url::parse("https://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/Discord%20to%20VR_0.2.1_x64-setup.exe").unwrap()));
-        for url in ["http://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/a-setup.exe",
+        assert!(allowed_download(&reqwest::Url::parse("https://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.2/DiToVR_0.2.2_x64-setup.exe").unwrap()));
+        assert!(allowed_download(&reqwest::Url::parse("https://github.com/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/Discord%20to%20VR_0.2.1_x64-setup.exe").unwrap()));
+        for url in ["http://github.com/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/a-setup.exe",
             "https://github.com/other/repo/releases/download/v0.2.1/a-setup.exe",
-            "https://github.com.evil.example/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/a-setup.exe",
-            "https://user:secret@github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/a-setup.exe",
-            "https://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/a.zip"] {
+            "https://github.com.evil.example/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/a-setup.exe",
+            "https://user:secret@github.com/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/a-setup.exe",
+            "https://github.com/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/a.zip"] {
             assert!(!allowed_download(&reqwest::Url::parse(url).unwrap()));
         }
     }
@@ -426,7 +512,7 @@ mod tests {
         for (preview, debug) in [(true, false), (false, true)] {
             let path =
                 std::env::temp_dir().join(format!("update-preference-{}.json", std::process::id()));
-            let manager = UpdateManager::new(path.clone(), preview, debug);
+            let manager = UpdateManager::with_distribution(path.clone(), preview, debug, false);
             assert!(!manager.network_enabled);
             assert!(!manager.snapshot().supported);
             manager.save_preference(false).unwrap();

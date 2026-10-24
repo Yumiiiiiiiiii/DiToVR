@@ -2,7 +2,10 @@ import {readFile,writeFile,readdir} from "node:fs/promises";
 import {resolve,join} from "node:path";
 import {fileURLToPath} from "node:url";
 
-export const repository="Yumiiiiiiiiii/discord_To_VR";
+export const repository="Yumiiiiiiiiii/DiToVR";
+// 0.2.0/0.2.1 only accept this original URL prefix. GitHub redirects it to
+// the renamed repository, while the existing updater signature stays required.
+export const legacyDownloadRepository="Yumiiiiiiiiii/discord_To_VR";
 export const feedBranch="updates";
 export const updaterEndpoints=[
   `https://raw.githubusercontent.com/${repository}/${feedBranch}/latest.json`,
@@ -20,14 +23,14 @@ export function validateVersion(config, cargo, pkg, tag) {
   return version;
 }
 export function manifest(version,tag,filename,signature,date=new Date()) {
-  if(tag!==`v${version}`||filename!==`Discord to VR_${version}_x64-setup.exe`)throw new Error("Installer, version and tag must describe the same release.");
+  if(tag!==`v${version}`||filename!==`DiToVR_${version}_x64-setup.exe`)throw new Error("Installer, version and tag must describe the same release.");
   const decoded=Buffer.from(signature.trim(),"base64").toString("utf8");
   if(!decoded.includes(`version:${version}`))throw new Error("The updater signature must be bound to this release version.");
   // GitHub normalizes spaces to dots in uploaded release asset names.
   const publishedFilename=filename.replaceAll(' ','.');
   return {
-    version, notes:`Discord to VR ${version}。変更内容は GitHub Releases をご覧ください。`,pub_date:date.toISOString(),
-    platforms:{"windows-x86_64":{url:`https://github.com/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(publishedFilename)}`,signature:signature.trim()}},
+    version, notes:`DiToVR ${version}。変更内容は GitHub Releases をご覧ください。`,pub_date:date.toISOString(),
+    platforms:{"windows-x86_64":{url:`https://github.com/${legacyDownloadRepository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(publishedFilename)}`,signature:signature.trim()}},
   };
 }
 async function main() {
@@ -40,7 +43,7 @@ async function main() {
   if(process.argv.includes("--validate")) { console.log(`Release version validated: ${version}`);return; }
   const releaseTag=tag??`v${version}`;
   const directory=resolve(process.env.CARGO_TARGET_DIR??"target/tauri","release/bundle/nsis");
-  const expected=`Discord to VR_${version}_x64-setup.exe`;
+  const expected=`DiToVR_${version}_x64-setup.exe`;
   const files=await readdir(directory);
   if(!files.includes(expected)||!files.includes(`${expected}.sig`))throw new Error("Missing signed installer.");
   const signature=await readFile(join(directory,`${expected}.sig`),"utf8");

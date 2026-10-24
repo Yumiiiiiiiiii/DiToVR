@@ -4,7 +4,7 @@ import {fileURLToPath} from "node:url";
 import {feedBranch, manifest, repository, validateVersion} from "./release-manifest.mjs";
 
 const apiRoot = `/repos/${repository}`;
-const installerName = version => `Discord to VR_${version}_x64-setup.exe`;
+const installerName = version => `DiToVR_${version}_x64-setup.exe`;
 const publishedInstaller = version => installerName(version).replaceAll(" ", ".");
 
 function compareVersions(left, right) {
@@ -115,7 +115,7 @@ async function main() {
     const response = await fetch("https://api.github.com" + path, {
       method, headers: {Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
         Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
-        "Content-Type": "application/json", "User-Agent": "Discord-to-VR-release"},
+        "Content-Type": "application/json", "User-Agent": "DiToVR-release"},
       ...(body ? {body: JSON.stringify(body)} : {}), signal: AbortSignal.timeout(30000),
     });
     if (allowMissing && response.status === 404) return null;

@@ -1,11 +1,11 @@
 [package]
-name = "discord_To_VR"
+name = "ditovr-core"
 version = "0.1.0"
 edition = "2021"
 description = "Discord notifications in VR (XSOverlay)"
 
 [lib]
-name = "discord_vr_core"
+name = "ditovr_core"
 
 [dependencies]
 tokio = { version = "1.43", features = ["full"] }

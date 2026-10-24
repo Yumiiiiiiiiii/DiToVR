@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {manifest} from "./release-manifest.mjs";
 import {distributionPlan, publishFeed, readFeed} from "./publish-update-feed.mjs";
 
-const update = version => manifest(version, `v${version}`, `Discord to VR_${version}_x64-setup.exe`,
+const update = version => manifest(version, `v${version}`, `DiToVR_${version}_x64-setup.exe`,
   Buffer.from(`trusted comment: version:${version}\n`).toString("base64"));
 const snapshot = (version = "0.2.2") => ({head: "old-head", tree: "old-tree", bridgeVersion: "0.2.2", version});
 
@@ -19,7 +19,7 @@ function githubFixture(state, version, includeLegacyManifest, overrides = {}) {
       if (path.includes("/contents/latest.json?ref=")) return encoded(update(state.version));
       if (path.includes("/releases/tags/")) return {
         draft: false, prerelease: false, assets: [
-          {name: `Discord.to.VR_${version}_x64-setup.exe`},
+          {name: `DiToVR_${version}_x64-setup.exe`},
           ...(includeLegacyManifest ? [{name: "latest.json"}] : []),
         ], ...overrides,
       };
@@ -35,12 +35,12 @@ function githubFixture(state, version, includeLegacyManifest, overrides = {}) {
 test("only the migration release retains latest.json, including retries and minor version jumps", () => {
   const first = distributionPlan("0.2.2", null);
   assert.equal(first.includeLegacyManifest, true);
-  assert.deepEqual(first.files, ["target/tauri/release/bundle/nsis/Discord to VR_0.2.2_x64-setup.exe", "latest.json"]);
+  assert.deepEqual(first.files, ["target/tauri/release/bundle/nsis/DiToVR_0.2.2_x64-setup.exe", "latest.json"]);
   assert.equal(distributionPlan("0.2.2", snapshot()).includeLegacyManifest, true);
   assert.equal(distributionPlan("0.2.3", snapshot()).includeLegacyManifest, false);
   assert.equal(distributionPlan("0.2.3", snapshot("0.2.3")).includeLegacyManifest, false);
   assert.deepEqual(distributionPlan("1.0.0", snapshot()).files,
-    ["target/tauri/release/bundle/nsis/Discord to VR_1.0.0_x64-setup.exe"]);
+    ["target/tauri/release/bundle/nsis/DiToVR_1.0.0_x64-setup.exe"]);
   assert.throws(() => distributionPlan("0.2.2", snapshot("0.2.3")));
   assert.throws(() => distributionPlan("0.2.3", {...snapshot(), bridgeVersion: "0.2.4"}));
 });

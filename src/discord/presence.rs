@@ -268,7 +268,7 @@ async fn connection(
     let identify = if let (Some(id), Some(sequence)) = (&session.id, session.sequence) {
         json!({"op":6,"d":{"token":cfg.bot_token,"session_id":id,"seq":sequence}})
     } else {
-        json!({"op":2,"d":{"token":cfg.bot_token,"intents":INTENTS,"properties":{"os":"windows","browser":"discord-to-vr","device":"discord-to-vr"},"large_threshold":50}})
+        json!({"op":2,"d":{"token":cfg.bot_token,"intents":INTENTS,"properties":{"os":"windows","browser":"DiToVR","device":"DiToVR"},"large_threshold":50}})
     };
     send(&mut socket, identify).await?;
     let mut monitor = Monitor {

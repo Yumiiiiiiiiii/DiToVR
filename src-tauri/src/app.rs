@@ -1,4 +1,4 @@
-use discord_vr_core::{
+use ditovr_core::{
     config::{self, Config, ThemePreference},
     diagnostics::{Diagnostics, Snapshot, Source},
     discord::{
@@ -434,9 +434,9 @@ impl AppState {
         }
         if let Some(tray) = app.tray_by_id("main-tray") {
             let _ = tray.set_tooltip(Some(if privacy {
-                "Discord → VR · 配信用表示"
+                "DiToVR · 配信用表示"
             } else {
-                "Discord → VR · 通常表示"
+                "DiToVR · 通常表示"
             }));
         }
     }
@@ -756,7 +756,7 @@ pub async fn send_test(state: State<'_, AppState>) -> Result<(), String> {
         sender
     };
     if sender
-        .send_notification("Discord → VR", "これはテスト通知です", None, "", 0.0, 5.0)
+        .send_notification("DiToVR", "これはテスト通知です", None, "", 0.0, 5.0)
         .await
     {
         Ok(())
@@ -910,7 +910,7 @@ pub fn install_tray(app: &AppHandle, state: &AppState) {
         }
         let mut builder = TrayIconBuilder::with_id("main-tray")
             .menu(&menu)
-            .tooltip("Discord → VR")
+            .tooltip("DiToVR")
             .show_menu_on_left_click(false)
             .on_tray_icon_event(|tray, event| {
                 if matches!(
