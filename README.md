@@ -6,6 +6,8 @@ Discord デスクトップアプリの通知を [XSOverlay](https://store.steamp
 
 [ダウンロード（Releases）](https://github.com/Yumiiiiiiiiii/discord_To_VR/releases) · [操作ガイド](docs/UI_GUIDE.md) · [更新について](docs/AUTO_UPDATE.md)
 
+Microsoft Store 版は公開準備中です。審査・公開が完了するまでは Releases からダウンロードしてください。[プライバシーポリシー](docs/PRIVACY.md)
+
 本プロジェクトは、開発に生成 AI を使用しています。使用範囲と検証状況は [生成 AI の使用について](#生成-ai-の使用について) をご確認ください。
 
 ![ホーム画面。Discord と XSOverlay の接続状態、受信モード、通知の表示をまとめて確認できます](docs/images/home-light.png)
@@ -95,6 +97,12 @@ Discord デスクトップアプリの通知を [XSOverlay](https://store.steamp
 **×・Esc はトレイへの収納です。通知転送は続きます。** 停止するときは画面かトレイの「アプリを終了」を選んでください。設定の編集中は転送を一時停止し、保存・キャンセル後に再開します。
 
 収納中にショートカットや実行ファイルをもう一度開くと、起動済みの画面を表示します。通知転送を二重に開始しません。`-debug` など起動フラグを変更したい場合は、いったんアプリを終了してから起動してください。
+
+## Windows セキュリティで検出されたとき
+
+Microsoft Defender のセキュリティインテリジェンス（保護定義）を最新に更新し、[Releases](https://github.com/Yumiiiiiiiiii/discord_To_VR/releases) の setup を再確認してください。[Microsoft の更新案内](https://www.microsoft.com/en-us/wdsi/defenderupdates) も参照できます。
+
+更新後も検出される場合は実行を中止し、検出名・アプリのバージョン・Defender の定義バージョンを添えて [Issues](https://github.com/Yumiiiiiiiiii/discord_To_VR/issues) へお知らせください。認証情報や会話の内容は含めないでください。確認済みの検出と対応状況は [検出調査](docs/WINDOWS_DEFENDER.md) に記録しています。
 
 ## 通知が届かないとき
 

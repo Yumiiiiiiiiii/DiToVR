@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
-    "desktop:build:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-local.ps1"
+    "desktop:build:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-local.ps1",
+    "desktop:build:store": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-store.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

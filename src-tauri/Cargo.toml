@@ -6,6 +6,7 @@ description = "Discord notifications in VR — Tauri desktop app"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
+microsoft-store = []
 
 [[bin]]
 name = "discord_To_VR"
@@ -21,8 +22,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
-windows-sys = { version = "0.59", features = ["Win32_UI_Controls_Dialogs", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Storage_FileSystem", "Win32_System_Registry"] }
-tauri-plugin-updater = "2"
+windows-sys = { version = "0.59", features = ["Win32_UI_Controls_Dialogs", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Storage_FileSystem", "Win32_Storage_Packaging_Appx", "Win32_System_Registry"] }
+# Updates use signed NSIS installers only; do not compile the unused ZIP extractor.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-single-instance = "2"
 
 [dev-dependencies]

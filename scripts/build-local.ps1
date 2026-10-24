@@ -55,7 +55,7 @@ $env:CC_x86_64_pc_windows_gnu = $linker
 $env:RUSTFLAGS = $null
 $env:CARGO_ENCODED_RUSTFLAGS = '-L' + [char]31 + 'native=' + $runtime
 
-Write-Host 'Building a signed Windows release using the local GNU toolchain.'
+Write-Host 'Building a Windows release with Tauri updater signatures using the local GNU toolchain.'
 & node (Join-Path $repoRoot 'node_modules/@tauri-apps/cli/tauri.js') build --ci -- --locked
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & node (Join-Path $PSScriptRoot 'release-manifest.mjs')

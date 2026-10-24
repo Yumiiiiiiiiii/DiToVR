@@ -1,5 +1,7 @@
 # 開発ガイド
 
+Microsoft Store 用 MSIX の作成・申請は [Store 配布ガイド](MICROSOFT_STORE.md) を参照してください。
+
 ソースからの起動・検証・署名付きビルド・更新配信を行う開発者と配布者向けの手順です。アプリを使う方は [README](../README.md) と [操作ガイド](UI_GUIDE.md) を参照してください。
 
 ## 開発環境と検証
@@ -17,7 +19,7 @@ cargo test --locked
 cargo test --manifest-path src-tauri/Cargo.toml --locked --features custom-protocol
 cargo clippy --locked --all-targets -- -D warnings
 cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --features custom-protocol -- -D warnings
-node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs
+node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs
 ```
 
 インストーラーを一度ビルドすると、Tauri の NSIS を使ってアンインストール時の設定削除を検証できます。
@@ -35,6 +37,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-hooks
 `src/` は通知転送・設定保存などの共通ライブラリ、`src-tauri/` はアプリの起動とデスクトップ機能、`frontend/` は画面です。旧ネイティブ GUI とその起動用プログラムは削除し、起動先を Tauri 版に統一しています。
 
 ## 配布者の初回設定
+
+安定版タグの Actions は、npm と両方の Rust lockfile を監査し、Defender の定義を更新して、本体と setup を検査してから公開します。既知の脆弱性・検出・定義更新失敗・検査不能の場合は公開を止めます。Defender の検査結果は `discord-to-vr-security` の成果物に保存します。これは Windows のコード署名とは別の確認で、すべての PC で検出されないことを保証しません。0.2.1 の検出調査と Microsoft への再審査依頼用メモは [Windows Defender の検出調査](WINDOWS_DEFENDER.md) を参照してください。
 
 Windows の発行元情報は `src-tauri/tauri.conf.json` の `bundle.publisher` で `Discord to VR` に設定しています。アプリ一覧の発行元、実行ファイルとインストーラーの会社名へ反映します。この値と Windows の Authenticode 署名は別のものです。UAC・SmartScreen の認証済み発行元にはコード署名証明書が必要で、更新用の署名鍵ではその表示を変更できません。NSIS は発行元をインストール先の記録にも使うため、公開後は同じ値を維持してください。
 

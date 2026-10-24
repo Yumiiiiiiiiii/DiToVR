@@ -1,0 +1,87 @@
+name: Microsoft Store
+
+on:
+  push:
+    branches: [release]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  store:
+    if: github.repository == 'Yumiiiiiiiiii/discord_To_VR'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    concurrency:
+      group: discord-to-vr-microsoft-store
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - name: Validate Store version and release notes
+        run: |
+          node scripts/release-manifest.mjs --validate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and !(Test-Path -LiteralPath "docs/release-notes/$($env:GITHUB_REF_NAME).md" -PathType Leaf)) {
+            throw 'Write the changes since the previous release in docs/release-notes before submitting.'
+          }
+      - name: Audit tagged Store dependencies
+        if: github.ref_type == 'tag'
+        run: ./scripts/audit-release-dependencies.ps1
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/store-build
+          key: ${{ runner.os }}-store-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-store-cargo-
+      - name: Store regression tests
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/store-build
+        run: |
+          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path src-tauri/Cargo.toml --locked --features custom-protocol,microsoft-store
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build MSIX and scan with Microsoft Defender
+        id: build
+        run: |
+          Update-MpSignature -ErrorAction Stop
+          ./scripts/build-store.ps1
+      - name: Save Defender report
+        if: always() && steps.build.outputs.security_report_path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: discord-to-vr-store-security
+          path: ${{ steps.build.outputs.security_report_path }}
+          if-no-files-found: warn
+      - name: Save Store package
+        uses: actions/upload-artifact@v4
+        with:
+          name: discord-to-vr-microsoft-store
+          path: ${{ steps.build.outputs.package_path }}
+          if-no-files-found: error
+      - name: Submit tagged update to Microsoft Store
+        if: github.event_name == 'push' && github.ref_type == 'tag' && vars.MICROSOFT_STORE_PUBLISH_ENABLED == 'true'
+        env:
+          MICROSOFT_STORE_PUBLISH_ENABLED: ${{ vars.MICROSOFT_STORE_PUBLISH_ENABLED }}
+          AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          AZURE_AD_APPLICATION_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+          AZURE_AD_APPLICATION_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+          STORE_PACKAGE_PATH: ${{ steps.build.outputs.package_path }}
+          STORE_SECURITY_REPORT_PATH: ${{ steps.build.outputs.security_report_path }}
+        run: node scripts/publish-store.mjs
+      - name: Explain build-only result
+        if: github.event_name != 'push' || github.ref_type != 'tag' || vars.MICROSOFT_STORE_PUBLISH_ENABLED != 'true'
+        run: |
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Value 'Store MSIX built and scanned. No Store submission was made. Only version tag pushes submit updates after MICROSOFT_STORE_PUBLISH_ENABLED is set to true.'

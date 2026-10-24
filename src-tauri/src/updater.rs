@@ -27,6 +27,7 @@ pub enum Phase {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateStatus {
     current_version: String,
+    store_managed: bool,
     pub auto_update: bool,
     supported: bool,
     can_check: bool,
@@ -54,8 +55,13 @@ pub struct UpdateManager {
 }
 impl UpdateManager {
     pub fn new(path: PathBuf, preview: bool, debug: bool) -> Self {
-        let network_enabled = !preview && !debug && !cfg!(debug_assertions);
-        let (auto_update, problem) = if preview {
+        Self::with_distribution(path, preview, debug, store_managed())
+    }
+    fn with_distribution(path: PathBuf, preview: bool, debug: bool, store_managed: bool) -> Self {
+        let network_enabled = !store_managed && !preview && !debug && !cfg!(debug_assertions);
+        let (auto_update, problem) = if store_managed {
+            (false, None)
+        } else if preview {
             (true, None)
         } else {
             match std::fs::read(&path) {
@@ -68,7 +74,9 @@ impl UpdateManager {
             }
         };
         let supported = network_enabled && installed_executable();
-        let disabled_reason = if preview {
+        let disabled_reason = if store_managed {
+            Some("このアプリの更新は Microsoft Store が管理します。Microsoft Store の「ライブラリ」で更新を確認できます。".into())
+        } else if preview {
             Some("画面プレビューでは更新の通信・適用を行いません。".into())
         } else if debug {
             Some("-debug では Discord の受信テストだけを行います。更新は通常起動で確認してください。".into())
@@ -85,6 +93,7 @@ impl UpdateManager {
         Self {
             status: Arc::new(Mutex::new(UpdateStatus {
                 current_version: env!("CARGO_PKG_VERSION").into(),
+                store_managed,
                 auto_update,
                 supported,
                 can_check: network_enabled,
@@ -113,6 +122,9 @@ impl UpdateManager {
             .clone()
     }
     pub fn report_migration_failure(&self) {
+        if self.snapshot().store_managed {
+            return;
+        }
         self.mutate(|s| {
             s.auto_update = false;
             s.phase = Phase::Error;
@@ -126,6 +138,9 @@ impl UpdateManager {
         });
     }
     fn save_preference(&self, enabled: bool) -> Result<(), String> {
+        if self.snapshot().store_managed {
+            return Err("更新の設定は Microsoft Store で変更してください。".into());
+        }
         let _write = self
             .preference_write
             .lock()
@@ -149,6 +164,18 @@ impl UpdateManager {
         self.mutate(|s| s.auto_update = enabled);
         Ok(())
     }
+}
+
+/// Package identity also protects an MSIX built outside our Store build command.
+/// An unexpected API failure must never enable the NSIS updater in a package.
+fn store_managed() -> bool {
+    use windows_sys::Win32::{
+        Foundation::APPMODEL_ERROR_NO_PACKAGE, Storage::Packaging::Appx::GetCurrentPackageFullName,
+    };
+    let mut length = 0;
+    cfg!(feature = "microsoft-store")
+        || unsafe { GetCurrentPackageFullName(&mut length, std::ptr::null_mut()) }
+            != APPMODEL_ERROR_NO_PACKAGE
 }
 
 pub fn migrate_preferences(
@@ -370,6 +397,44 @@ mod signed_download_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "microsoft-store")]
+    #[test]
+    fn store_build_blocks_nsis_even_when_launched_without_package_identity() {
+        let manager = UpdateManager::new(
+            std::env::temp_dir().join("unused-store-updates.json"),
+            false,
+            false,
+        );
+        assert!(manager.snapshot().store_managed);
+        assert!(!manager.network_enabled);
+        assert!(manager.save_preference(true).is_err());
+    }
+    #[test]
+    fn store_distribution_never_enables_github_updates_or_changes_preferences() {
+        let dir =
+            std::env::temp_dir().join(format!("discord-vr-store-update-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("updates.json");
+        let original = br#"{"auto_update":true}"#;
+        std::fs::write(&path, original).unwrap();
+        for (preview, debug) in [(false, false), (true, false), (false, true)] {
+            let manager = UpdateManager::with_distribution(path.clone(), preview, debug, true);
+            let status = manager.snapshot();
+            assert!(status.store_managed);
+            assert!(
+                !manager.network_enabled
+                    && !status.can_check
+                    && !status.supported
+                    && !status.auto_update
+            );
+            assert!(manager.save_preference(true).is_err());
+            manager.report_migration_failure();
+            assert!(manager.snapshot().message.is_none());
+            assert_eq!(std::fs::read(&path).unwrap(), original);
+        }
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(dir).unwrap();
+    }
     #[test]
     fn preference_migration_preserves_opt_out_and_does_not_enable_updates_on_failure() {
         let dir = std::env::temp_dir().join(format!(
@@ -388,14 +453,14 @@ mod tests {
         assert!(migrate_preferences(&previous, &destination).unwrap());
         assert_eq!(std::fs::read(&previous).unwrap(), original);
         assert!(
-            !UpdateManager::new(destination.clone(), false, false)
+            !UpdateManager::with_distribution(destination.clone(), false, false, false)
                 .snapshot()
                 .auto_update
         );
         std::fs::write(&destination, br#"{"auto_update":true}"#).unwrap();
         assert!(!migrate_preferences(&previous, &destination).unwrap());
         assert!(
-            UpdateManager::new(destination.clone(), false, false)
+            UpdateManager::with_distribution(destination.clone(), false, false, false)
                 .snapshot()
                 .auto_update
         );
@@ -403,7 +468,7 @@ mod tests {
         std::fs::write(&previous, b"{invalid").unwrap();
         assert!(migrate_preferences(&previous, &destination).is_err());
         assert!(!destination.exists());
-        let manager = UpdateManager::new(destination, false, false);
+        let manager = UpdateManager::with_distribution(destination, false, false, false);
         manager.report_migration_failure();
         assert!(!manager.snapshot().auto_update);
         assert!(manager.snapshot().phase == Phase::Error);
@@ -426,7 +491,7 @@ mod tests {
         for (preview, debug) in [(true, false), (false, true)] {
             let path =
                 std::env::temp_dir().join(format!("update-preference-{}.json", std::process::id()));
-            let manager = UpdateManager::new(path.clone(), preview, debug);
+            let manager = UpdateManager::with_distribution(path.clone(), preview, debug, false);
             assert!(!manager.network_enabled);
             assert!(!manager.snapshot().supported);
             manager.save_preference(false).unwrap();
