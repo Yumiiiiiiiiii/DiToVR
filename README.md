@@ -1,10 +1,12 @@
-# Discord → VR
+# DiToVR
+
+旧名 Discord to VR から名称を変更しました。既存の設定は初回起動時に引き継ぎます。
 
 **VR の中で、Discord の通知を確認する。**
 
 Discord デスクトップアプリの通知を [XSOverlay](https://store.steampowered.com/app/1173510/XSOverlay/) に転送する、Windows 用アプリです。ヘッドセットを外さずに DM やメンションを確認でき、配信中は会話の内容を隠す表示へ切り替えられます。
 
-[ダウンロード（Releases）](https://github.com/Yumiiiiiiiiii/discord_To_VR/releases) · [操作ガイド](docs/UI_GUIDE.md) · [更新について](docs/AUTO_UPDATE.md)
+[ダウンロード（Releases）](https://github.com/Yumiiiiiiiiii/DiToVR/releases) · [操作ガイド](docs/UI_GUIDE.md) · [更新について](docs/AUTO_UPDATE.md)
 
 Microsoft Store 版は公開準備中です。審査・公開が完了するまでは Releases からダウンロードしてください。[プライバシーポリシー](docs/PRIVACY.md)
 
@@ -12,7 +14,7 @@ Microsoft Store 版は公開準備中です。審査・公開が完了するま�
 
 ![ホーム画面。Discord と XSOverlay の接続状態、受信モード、通知の表示をまとめて確認できます](docs/images/home-light.png)
 
-この README は **0.2.1 の Windows アプリ**の機能を紹介します。画像はダミー情報を使ったアプリのプレビューで、実際の会話や接続結果ではありません。一部の画像は以前のバージョンで撮影しています。Releases で配布版のバージョンを確認してください。
+この README は **0.2.1 の Windows アプリ**の機能を紹介します。画像は名称変更後のプレビューで、ダミー情報を使用しています。実際の会話や接続結果ではありません。名称変更は次の配布から反映されるため、Releases で公開済みの版とファイル名を確認してください。
 
 ## こんなときに使えます
 
@@ -74,7 +76,7 @@ Microsoft Store 版は公開準備中です。審査・公開が完了するま�
 `-debug` を付けて起動すると、Discord の受信診断をアプリ内で確認できます。XSOverlay・SteamVR は不要で、VR への通知は送りません。
 
 ```powershell
-.\discord_To_VR.exe -debug
+.\DiToVR.exe -debug
 ```
 
 「Discord からの実受信」と「ダミー受信」を分けて表示します。実受信の件数・時刻・除外理由を確認でき、ダミー受信では許可リストや自動判別の動きを試せます。本文・送信者名・認証情報は診断に記録しません。ダミーテストの成功は、Discord から届いたことを示すものではありません。[受信診断の使い方](docs/UI_GUIDE.md#受信できているか確認する)
@@ -87,9 +89,9 @@ Microsoft Store 版は公開準備中です。審査・公開が完了するま�
 
 必要なものは、Windows 10 / 11、Discord デスクトップアプリ、SteamVR、XSOverlay、Microsoft Edge WebView2 Runtime です。Discord のブラウザー版には対応しません。
 
-1. [Releases](https://github.com/Yumiiiiiiiiii/discord_To_VR/releases) で 0.2.0 以降の配布ファイルを確認します。自動更新を使う場合はインストーラー版を選びます。ZIP 版では `WebView2Loader.dll` を実行ファイルと同じフォルダーに置き、WebView2 Runtime を別途用意してください。
+1. [Releases](https://github.com/Yumiiiiiiiiii/DiToVR/releases) で 0.2.0 以降の配布ファイルを確認します。自動更新を使う場合はインストーラー版を選びます。ZIP 版では `WebView2Loader.dll` を実行ファイルと同じフォルダーに置き、WebView2 Runtime を別途用意してください。
 2. Discord・SteamVR・XSOverlay を起動し、XSOverlay の通知用 WebSocket を有効にします。
-3. `discord_To_VR.exe` を起動し、初回の案内に沿って、**自分の Discord アカウントで作成したアプリの Client ID・Client Secret** を設定します。[Developer Portal](https://discord.com/developers/applications) の OAuth2 → Redirects に `http://localhost/` を追加して保存します。
+3. `DiToVR.exe` を起動し、初回の案内に沿って、**自分の Discord アカウントで作成したアプリの Client ID・Client Secret** を設定します。[Developer Portal](https://discord.com/developers/applications) の OAuth2 → Redirects に `http://localhost/` を追加して保存します。
 4. Discord の承認画面で承認し、ホームで Discord と XSOverlay が両方「接続済み」になったら「テスト通知を送る」で VR 内の表示を確かめます。
 
 初期設定では Bot Token や Discord アカウントのトークンを入力しません。Bot の設定は、自動判別を使いたい場合に追加します。[初回設定の画面付きガイド](docs/UI_GUIDE.md#初回のチュートリアル)
@@ -100,9 +102,9 @@ Microsoft Store 版は公開準備中です。審査・公開が完了するま�
 
 ## Windows セキュリティで検出されたとき
 
-Microsoft Defender のセキュリティインテリジェンス（保護定義）を最新に更新し、[Releases](https://github.com/Yumiiiiiiiiii/discord_To_VR/releases) の setup を再確認してください。[Microsoft の更新案内](https://www.microsoft.com/en-us/wdsi/defenderupdates) も参照できます。
+Microsoft Defender のセキュリティインテリジェンス（保護定義）を最新に更新し、[Releases](https://github.com/Yumiiiiiiiiii/DiToVR/releases) の setup を再確認してください。[Microsoft の更新案内](https://www.microsoft.com/en-us/wdsi/defenderupdates) も参照できます。
 
-更新後も検出される場合は実行を中止し、検出名・アプリのバージョン・Defender の定義バージョンを添えて [Issues](https://github.com/Yumiiiiiiiiii/discord_To_VR/issues) へお知らせください。認証情報や会話の内容は含めないでください。確認済みの検出と対応状況は [検出調査](docs/WINDOWS_DEFENDER.md) に記録しています。
+更新後も検出される場合は実行を中止し、検出名・アプリのバージョン・Defender の定義バージョンを添えて [Issues](https://github.com/Yumiiiiiiiiii/DiToVR/issues) へお知らせください。認証情報や会話の内容は含めないでください。確認済みの検出と対応状況は [検出調査](docs/WINDOWS_DEFENDER.md) に記録しています。
 
 ## 通知が届かないとき
 
@@ -122,19 +124,19 @@ XSOverlay が未接続の間の通知は転送しません。接続後に古い�
 
 1. アプリの画面かトレイから「アプリを終了」を選びます。×・Esc では終了しません。
 2. Windows 11 は「設定 → アプリ → インストールされているアプリ」、Windows 10 は「設定 → アプリ → アプリと機能」を開きます。
-3. 「Discord to VR」の「アンインストール」を選び、案内に従います。インストール先の `uninstall.exe` からも実行できます。
+3. 「DiToVR」の「アンインストール」を選び、案内に従います。インストール先の `uninstall.exe` からも実行できます。
 
-設定を残して再インストールしたい場合は、「アプリケーションデータを削除する」のチェックを付けずに進めます。設定・認証情報も消したい場合は、この項目を選んでください。選択すると `%APPDATA%\discord-to-vr` の設定と更新設定、以前の保存先やアプリの画面データも削除します。実行ファイルと同じフォルダーに手動で置いていた旧 `config.json` は削除しません。
+設定を残して再インストールしたい場合は、「アプリケーションデータを削除する」のチェックを付けずに進めます。設定・認証情報も消したい場合は、この項目を選んでください。選択すると `%APPDATA%\DiToVR` の設定と更新設定、以前の保存先やアプリの画面データも削除します。実行ファイルと同じフォルダーに手動で置いていた旧 `config.json` は削除しません。
 
-ZIP 版はアプリを終了してから、展開したフォルダーを削除します。設定も削除したい場合は、エクスプローラーのアドレス欄に `%APPDATA%\discord-to-vr` を入力し、そのフォルダーを削除してください。以前の版から引き継いだ場合は `%APPDATA%\io.github.yumiiiiiiiiii.discord-to-vr` にも旧設定が残っています。
+ZIP 版はアプリを終了してから、展開したフォルダーを削除します。設定も削除したい場合は、エクスプローラーのアドレス欄に `%APPDATA%\DiToVR` を入力し、そのフォルダーを削除してください。以前の版から引き継いだ場合は `%APPDATA%\discord-to-vr` や `%APPDATA%\io.github.yumiiiiiiiiii.discord-to-vr` にも旧設定が残っています。
 
 アンインストールは Discord・SteamVR・XSOverlay を削除しません。Discord 上の承認も解除したい場合は Discord の「設定 → 認証済みアプリ」で解除してください。
 
 ## 認証情報と設定の扱い
 
-Client Secret、OAuth トークン、任意の Bot Token は Windows ユーザーに紐づけて暗号化保存します。保存済みの Secret は設定画面へ読み戻しません。変更しなければ、空欄のまま保存できます。設定先は `%APPDATA%\discord-to-vr\config.json` です。
+Client Secret、OAuth トークン、任意の Bot Token は Windows ユーザーに紐づけて暗号化保存します。保存済みの Secret は設定画面へ読み戻しません。変更しなければ、空欄のまま保存できます。設定先は `%APPDATA%\DiToVR\config.json` です。
 
-新しい保存先に設定がない場合は、以前の `%APPDATA%\io.github.yumiiiiiiiiii.discord-to-vr` から設定・更新設定をコピーして引き継ぎます。以前の設定がなければ、実行ファイルと同じフォルダーの旧 `config.json` を引き継ぎます。元のファイルは残し、新しい保存先にある設定は上書きしません。
+新しい保存先に設定がない場合は、旧名の `%APPDATA%\discord-to-vr`、さらに以前の `%APPDATA%\io.github.yumiiiiiiiiii.discord-to-vr` の順に設定・更新設定をコピーして引き継ぎます。以前の設定がなければ、実行ファイルと同じフォルダーの旧 `config.json` を引き継ぎます。元のファイルは残し、新しい保存先にある設定は上書きしません。
 
 Discord RPC の利用・承認条件には環境による制約があります。[調査と設計レビュー](docs/RPC_DISTRIBUTION_REVIEW.md) にまとめています。暗号化、旧設定の移行、通知やログの扱いは [SECURITY.md](SECURITY.md) を参照してください。
 
@@ -144,7 +146,7 @@ Discord RPC の利用・承認条件には環境による制約があります�
 
 自動テストや画面の動作確認を行い、確認できた範囲と未検証の項目を [検証状況](IMPROVEMENTS.md#検証) に記載しています。認証情報やプライバシーの扱いは [SECURITY.md](SECURITY.md)、Discord の利用・承認条件は [設計レビュー](docs/RPC_DISTRIBUTION_REVIEW.md) で公開しています。気になる方は、ソースコードとこれらの情報を確認したうえで利用をご判断ください。
 
-不具合や説明の誤りを見つけた場合は、[Issues](https://github.com/Yumiiiiiiiiii/discord_To_VR/issues) でお知らせください。報告時に Client Secret・トークン・実際の会話内容を含めないでください。
+不具合や説明の誤りを見つけた場合は、[Issues](https://github.com/Yumiiiiiiiiii/DiToVR/issues) でお知らせください。報告時に Client Secret・トークン・実際の会話内容を含めないでください。
 
 ## 詳しいガイド
 

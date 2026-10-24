@@ -9,7 +9,8 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 const CHECK_INTERVAL: Duration = Duration::from_secs(12 * 60 * 60);
-const REPOSITORY_PATH: &str = "/Yumiiiiiiiiii/discord_To_VR/releases/download/";
+const REPOSITORY_PATH: &str = "/Yumiiiiiiiiii/DiToVR/releases/download/";
+const LEGACY_REPOSITORY_PATH: &str = "/Yumiiiiiiiiii/discord_To_VR/releases/download/";
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -178,6 +179,21 @@ fn store_managed() -> bool {
             != APPMODEL_ERROR_NO_PACKAGE
 }
 
+pub fn migrate_preferences_from(
+    sources: &[&std::path::Path],
+    destination: &std::path::Path,
+) -> std::io::Result<bool> {
+    if destination.try_exists()? {
+        return Ok(false);
+    }
+    for source in sources {
+        if source.try_exists()? {
+            return migrate_preferences(source, destination);
+        }
+    }
+    Ok(false)
+}
+
 pub fn migrate_preferences(
     previous: &std::path::Path,
     destination: &std::path::Path,
@@ -222,7 +238,7 @@ fn replace_preference(from: &std::path::Path, to: &std::path::Path) -> std::io::
 /// NSIS remembers the actual installation directory. Never install from a copied ZIP executable.
 fn installed_executable() -> bool {
     use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_SZ};
-    let key: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Discord to VR\0"
+    let key: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\DiToVR\0"
         .encode_utf16()
         .collect();
     let value: Vec<u16> = "InstallLocation\0".encode_utf16().collect();
@@ -244,7 +260,7 @@ fn installed_executable() -> bool {
     }
     let end = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
     let installed = PathBuf::from(String::from_utf16_lossy(&buffer[..end]).trim_matches('"'))
-        .join("discord_To_VR.exe");
+        .join("DiToVR.exe");
     match (
         installed.canonicalize(),
         std::env::current_exe().and_then(|p| p.canonicalize()),
@@ -262,7 +278,8 @@ fn allowed_download(url: &reqwest::Url) -> bool {
         && url.password().is_none()
         && url.query().is_none()
         && url.fragment().is_none()
-        && url.path().starts_with(REPOSITORY_PATH)
+        && (url.path().starts_with(REPOSITORY_PATH)
+            || url.path().starts_with(LEGACY_REPOSITORY_PATH))
         && url.path().ends_with("-setup.exe")
 }
 
@@ -447,10 +464,12 @@ mod tests {
         ));
         std::fs::create_dir(&dir).unwrap();
         let previous = dir.join("previous.json");
+        let older = dir.join("older.json");
         let destination = dir.join("updates.json");
         let original = br#"{"auto_update":false}"#;
         std::fs::write(&previous, original).unwrap();
-        assert!(migrate_preferences(&previous, &destination).unwrap());
+        std::fs::write(&older, br#"{"auto_update":true}"#).unwrap();
+        assert!(migrate_preferences_from(&[&previous, &older], &destination).unwrap());
         assert_eq!(std::fs::read(&previous).unwrap(), original);
         assert!(
             !UpdateManager::with_distribution(destination.clone(), false, false, false)
@@ -466,23 +485,25 @@ mod tests {
         );
         std::fs::remove_file(&destination).unwrap();
         std::fs::write(&previous, b"{invalid").unwrap();
-        assert!(migrate_preferences(&previous, &destination).is_err());
+        assert!(migrate_preferences_from(&[&previous, &older], &destination).is_err());
         assert!(!destination.exists());
         let manager = UpdateManager::with_distribution(destination, false, false, false);
         manager.report_migration_failure();
         assert!(!manager.snapshot().auto_update);
         assert!(manager.snapshot().phase == Phase::Error);
         std::fs::remove_file(previous).unwrap();
+        std::fs::remove_file(older).unwrap();
         std::fs::remove_dir(dir).unwrap();
     }
     #[test]
     fn update_urls_only_allow_this_repositories_https_installers() {
-        assert!(allowed_download(&reqwest::Url::parse("https://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/Discord%20to%20VR_0.2.1_x64-setup.exe").unwrap()));
-        for url in ["http://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/a-setup.exe",
+        assert!(allowed_download(&reqwest::Url::parse("https://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.2/DiToVR_0.2.2_x64-setup.exe").unwrap()));
+        assert!(allowed_download(&reqwest::Url::parse("https://github.com/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/Discord%20to%20VR_0.2.1_x64-setup.exe").unwrap()));
+        for url in ["http://github.com/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/a-setup.exe",
             "https://github.com/other/repo/releases/download/v0.2.1/a-setup.exe",
-            "https://github.com.evil.example/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/a-setup.exe",
-            "https://user:secret@github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/a-setup.exe",
-            "https://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.1/a.zip"] {
+            "https://github.com.evil.example/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/a-setup.exe",
+            "https://user:secret@github.com/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/a-setup.exe",
+            "https://github.com/Yumiiiiiiiiii/DiToVR/releases/download/v0.2.1/a.zip"] {
             assert!(!allowed_download(&reqwest::Url::parse(url).unwrap()));
         }
     }

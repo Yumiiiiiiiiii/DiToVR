@@ -1,7 +1,7 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
 import {storeManifest} from "./store-manifest.mjs";
-const identity={name:"Example.DiscordtoVR",publisher:"CN=test-publisher",publisherDisplayName:'Name & "Co"'};
+const identity={name:"Example.DiToVR",publisher:"CN=test-publisher",publisherDisplayName:'Name & "Co"'};
 test("Store package uses supplied identity, escaped XML, desktop full trust and Store version format",()=>{
   const manifest=storeManifest(identity,"0.2.1");
   assert.match(manifest,/Version="0\.2\.1\.0"/);

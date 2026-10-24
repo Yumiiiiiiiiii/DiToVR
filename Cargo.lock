@@ -119,7 +119,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "discord_To_VR"
+name = "ditovr-core"
 version = "0.1.0"
 dependencies = [
  "base64",

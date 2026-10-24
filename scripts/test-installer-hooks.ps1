@@ -15,9 +15,10 @@ if (!$fixtureRoot.StartsWith($workspace + [IO.Path]::DirectorySeparatorChar, [St
     throw 'The fixture must be inside the workspace.'
 }
 $hook = Get-Content -LiteralPath (Join-Path $repoRoot 'src-tauri/installer-hooks.nsh') -Raw -Encoding UTF8
-$productionDirectory = '"$APPDATA\discord-to-vr"'
-if ($hook.Split(@($productionDirectory), [StringSplitOptions]::None).Count -ne 2) {
-    throw 'Unexpected hook cleanup path. Review the fixture before executing.'
+foreach ($productionDirectory in @('"$APPDATA\DiToVR"', '"$APPDATA\discord-to-vr"')) {
+    if ($hook.Split(@($productionDirectory), [StringSplitOptions]::None).Count -ne 2) {
+        throw 'Unexpected hook cleanup path. Review the fixture before executing.'
+    }
 }
 
 foreach ($case in @(
@@ -26,7 +27,7 @@ foreach ($case in @(
     @{ name='explicit-cleanup'; selected=1; updating=0; removed=$true }
 )) {
     $caseRoot = Join-Path $fixtureRoot $case.name
-    $settings = Join-Path $caseRoot 'discord-to-vr'
+    $settings = Join-Path $caseRoot 'DiToVR'
     New-Item -ItemType Directory -Path $settings -Force | Out-Null
     $settings = (Resolve-Path -LiteralPath $settings).Path
     if (!$settings.StartsWith($fixtureRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
@@ -34,22 +35,27 @@ foreach ($case in @(
     }
     [IO.File]::WriteAllText((Join-Path $settings 'config.json'), 'synthetic settings')
     [IO.File]::WriteAllText((Join-Path $settings 'updates.json'), 'synthetic update preference')
+    $oldSettings = Join-Path $caseRoot 'discord-to-vr'
+    New-Item -ItemType Directory -Path $oldSettings -Force | Out-Null
+    $oldSettings = (Resolve-Path -LiteralPath $oldSettings).Path
+    if (!$oldSettings.StartsWith($fixtureRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe old settings fixture path.' }
+    [IO.File]::WriteAllText((Join-Path $oldSettings 'config.json'), 'synthetic old settings')
     $sibling = Join-Path $caseRoot 'must-remain.txt'
     [IO.File]::WriteAllText($sibling, 'unrelated fixture file')
     $hookFile = Join-Path $caseRoot 'hook.nsh'
-    $fixtureHook = $hook.Replace($productionDirectory, '"' + $settings + '"')
+    $fixtureHook = $hook.Replace('"$APPDATA\DiToVR"', '"' + $settings + '"').Replace('"$APPDATA\discord-to-vr"', '"' + $oldSettings + '"')
     [IO.File]::WriteAllText($hookFile, $fixtureHook, [Text.UTF8Encoding]::new($false))
     $fixtureExe = Join-Path $caseRoot 'fixture.exe'
     $fixtureScript = Join-Path $caseRoot 'fixture.nsi'
     $script = @'
 Unicode true
 !include "LogicLib.nsh"
-Name "Discord to VR cleanup fixture"
+Name "DiToVR cleanup fixture"
 VIProductVersion "0.0.0.0"
 VIAddVersionKey "FileVersion" "0.0.0.0"
 VIAddVersionKey "FileDescription" "Isolated cleanup test"
 VIAddVersionKey "LegalCopyright" "Test fixture"
-!define MANUFACTURER "Discord to VR"
+!define MANUFACTURER "DiToVR"
 OutFile "@EXE@"
 RequestExecutionLevel user
 SilentInstall silent
@@ -72,6 +78,7 @@ SectionEnd
     if ((Test-Path -LiteralPath $settings) -eq $case.removed) {
         throw "Unexpected cleanup result: $($case.name)"
     }
+    if ((Test-Path -LiteralPath $oldSettings) -eq $case.removed) { throw 'Unexpected legacy cleanup result.' }
     if (!(Test-Path -LiteralPath $sibling -PathType Leaf)) { throw 'Unrelated file was removed.' }
     if (!$case.removed) {
         if ([IO.File]::ReadAllText((Join-Path $settings 'config.json')) -ne 'synthetic settings' -or

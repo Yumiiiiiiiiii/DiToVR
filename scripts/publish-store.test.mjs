@@ -48,11 +48,11 @@ function zip64Fixture(name, data) {
 }
 function artifact() {
   const msix = singleFileZip("AppxManifest.xml", Buffer.from(storeManifest(identity, "0.2.2")));
-  const fileName = "DiscordToVR_0.2.2.0_x64.msix";
+  const fileName = "DiToVR_0.2.2.0_x64.msix";
   return {identity, version: "0.2.2", fileName, msix, notes: "- Improved Store updates.", report: {
     EngineVersion: "1.1", SignatureVersion: "1.2", Files: [
       {File: fileName, SHA256: createHash("sha256").update(msix).digest("hex"), ScannerExitCode: 0},
-      {File: "discord_To_VR.exe", ScannerExitCode: 0},
+      {File: "DiToVR.exe", ScannerExitCode: 0},
     ],
   }};
 }

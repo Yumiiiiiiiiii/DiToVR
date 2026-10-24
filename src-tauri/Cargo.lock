@@ -793,10 +793,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "discord-vr-desktop"
+name = "ditovr-desktop"
 version = "0.2.1"
 dependencies = [
- "discord_To_VR",
+ "ditovr-core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -809,7 +809,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "discord_To_VR"
+name = "ditovr-core"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",

@@ -25,12 +25,12 @@ function newer(version, previous) {
 
 export function validateArtifact({identity, version, fileName, msix, report, notes}) {
   storeManifest(identity, version); // Also validates the configured identity and MSIX version range.
-  if (!/^[A-Z0-9]{12}$/.test(identity.productId ?? "") || fileName !== `DiscordToVR_${version}.0_x64.msix`) throw new Error("Unexpected Store product or MSIX filename.");
+  if (!/^[A-Z0-9]{12}$/.test(identity.productId ?? "") || fileName !== `DiToVR_${version}.0_x64.msix`) throw new Error("Unexpected Store product or MSIX filename.");
   if (typeof notes !== "string" || !notes.trim() || notes.trim().length > 1500) throw new Error("Store release notes must contain 1-1500 characters of changes.");
   if (!Array.isArray(report?.Files) || !report.Files.length || report.Files.some(file => file.ScannerExitCode !== 0) || !report.EngineVersion || !report.SignatureVersion) throw new Error("A successful Defender security report is required.");
   const sha256 = createHash("sha256").update(msix).digest("hex");
   const scans = report.Files.filter(file => file.File === fileName);
-  if (scans.length !== 1 || scans[0].SHA256 !== sha256 || !report.Files.some(file => file.File === "discord_To_VR.exe")) throw new Error("The MSIX does not match the Defender security report.");
+  if (scans.length !== 1 || scans[0].SHA256 !== sha256 || !report.Files.some(file => file.File === "DiToVR.exe")) throw new Error("The MSIX does not match the Defender security report.");
   // Compare against the actual manifest inside the scanned MSIX, not a sidecar.
   const manifest = zipEntry(msix, "AppxManifest.xml").toString("utf8").replaceAll("\r\n", "\n").replace(/^\uFEFF/, "");
   if (manifest !== storeManifest(identity, version).replaceAll("\r\n", "\n")) throw new Error("MSIX identity, version or manifest differs from the configured Store build.");

@@ -8,7 +8,7 @@ Discord の通知を XSOverlay で VR 内に表示。必要な会話の選択や
 
 VR の中でも、Discord の通知を確認できます。
 
-Discord to VR は、Windows の Discord デスクトップアプリから受け取った通知を、同じ PC の XSOverlay に転送する無料の非公式アプリです。DM やメンションを確認したり、配信中は名前・本文・アイコンを隠して新着だけを表示したりできます。
+DiToVR は、Windows の Discord デスクトップアプリから受け取った通知を、同じ PC の XSOverlay に転送する無料の非公式アプリです。DM やメンションを確認したり、配信中は名前・本文・アイコンを隠して新着だけを表示したりできます。
 
 ・案内付きの初回設定
 ・チャンネル・DM 単位の許可リスト（最大32件）
@@ -31,7 +31,7 @@ Discord, VR, XSOverlay, SteamVR, 通知, オーバーレイ, 配信
 
 ## 審査担当者向け
 
-Discord to VR is a free, unofficial desktop notification bridge. runFullTrust is needed for Discord desktop local RPC/IPC, local XSOverlay communication, the Windows tray, native file selection and DPAPI-protected credentials. No administrator privileges, drivers, process injection or security setting changes are required. Store builds disable GitHub/NSIS updates and receive updates through Microsoft Store.
+DiToVR is a free, unofficial desktop notification bridge. runFullTrust is needed for Discord desktop local RPC/IPC, local XSOverlay communication, the Windows tray, native file selection and DPAPI-protected credentials. No administrator privileges, drivers, process injection or security setting changes are required. Store builds disable GitHub/NSIS updates and receive updates through Microsoft Store.
 
 Launch from Start. Follow the first-run tutorial. For live receiving, install official Discord desktop, sign into your own test account, create your own Discord Developer Portal application with the redirect URL shown in the tutorial, enter its Client ID and Client Secret, and approve RPC authorization. RPC scope availability depends on Discord. XSOverlay (separately purchased on Steam) and SteamVR are needed for VR delivery. No shared credentials or licensed third-party accounts are provided.
 

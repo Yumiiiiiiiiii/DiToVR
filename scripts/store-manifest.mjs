@@ -14,7 +14,7 @@ export function storeManifest(identity, version) {
  IgnorableNamespaces="uap rescap">
  <Identity Name="${xml(identity.name)}" Publisher="${xml(identity.publisher)}" Version="${version}.0" ProcessorArchitecture="x64" />
  <Properties>
-  <DisplayName>Discord to VR</DisplayName>
+  <DisplayName>DiToVR</DisplayName>
   <PublisherDisplayName>${xml(identity.publisherDisplayName)}</PublisherDisplayName>
   <Description>Discord notifications in VR with XSOverlay</Description>
   <Logo>Assets\\StoreLogo.png</Logo>
@@ -22,8 +22,8 @@ export function storeManifest(identity, version) {
  <Resources><Resource Language="ja-jp" /></Resources>
  <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" /></Dependencies>
  <Applications>
-  <Application Id="DiscordToVR" Executable="discord_To_VR.exe" EntryPoint="Windows.FullTrustApplication">
-   <uap:VisualElements DisplayName="Discord to VR" Description="Discord notifications in VR with XSOverlay"
+  <Application Id="DiToVR" Executable="DiToVR.exe" EntryPoint="Windows.FullTrustApplication">
+   <uap:VisualElements DisplayName="DiToVR" Description="Discord notifications in VR with XSOverlay"
     BackgroundColor="transparent" Square150x150Logo="Assets\\Square150x150Logo.png" Square44x44Logo="Assets\\Square44x44Logo.png" />
   </Application>
  </Applications>
@@ -45,7 +45,7 @@ if (process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)
   // Explicit allowlist: never copy a build directory, user config, or signing key.
   mkdirSync(join(stage,"Assets"),{recursive:true});
   writeFileSync(join(stage,"AppxManifest.xml"),storeManifest(identity,version));
-  copyFileSync(exe,join(stage,"discord_To_VR.exe"));
+  copyFileSync(exe,join(stage,"DiToVR.exe"));
   // GNU builds dynamically link Microsoft's WebView2 loader. MSVC may link it statically.
   const loader=join(dirname(exe),"WebView2Loader.dll");
   if (existsSync(loader)) copyFileSync(loader,join(stage,"WebView2Loader.dll"));

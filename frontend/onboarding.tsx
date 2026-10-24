@@ -98,7 +98,7 @@ export function Onboarding({ initial, status, busy, resumeConnection, onSave, on
           <p className="tutorial-lead">{status.debugEnabled ? "今回は Discord の受信テスト専用です。XSOverlay・SteamVR は起動せず、Discord の接続設定を進めます。" : "Discord のメッセージ通知を XSOverlay に届けます。まずは通常の通知を受け取れるように設定します。"}</p>
           <div className="tutorial-flow" aria-label="Discord の通知をこのアプリから XSOverlay へ転送">
             <div><span className="discord-icon"><MessageCircle size={28} /></span><strong>Discord</strong><small>通知を受け取る</small></div><ArrowRight className="tutorial-flow-arrow" size={20} />
-            <div><span className="tutorial-app-icon"><Bell size={28} /></span><strong>Discord to VR</strong><small>この PC で転送</small></div><ArrowRight className="tutorial-flow-arrow" size={20} />
+            <div><span className="tutorial-app-icon"><Bell size={28} /></span><strong>DiToVR</strong><small>この PC で転送</small></div><ArrowRight className="tutorial-flow-arrow" size={20} />
             <div><span className="overlay-icon"><Gamepad2 size={28} /></span><strong>XSOverlay</strong><small>VR の中に表示</small></div>
           </div>
           <div className="tutorial-callout"><ShieldCheck size={20} /><div><strong>自分のアカウントで使います</strong><p>自分の Client ID と Client Secret を用意します。保存する秘密情報は、この Windows ユーザーで暗号化して保護します。</p></div></div>

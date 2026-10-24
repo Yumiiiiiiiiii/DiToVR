@@ -26,7 +26,7 @@ npm.cmd run desktop:build:store
 npm.cmd run desktop:build:store -- -CompilerRoot 'D:/test/discxss/target/security-analysis-tools/compiler'
 ```
 
-`target/store/<ビルドID>/DiscordToVR_0.2.1.0_x64.msix` を生成します。3桁バージョンに `.0` を付けます。更新には前回より大きいバージョンが必要です。Tauri、npm、デスクトップ Cargo のバージョンを合わせて更新します。
+`target/store/<ビルドID>/DiToVR_0.2.1.0_x64.msix` を生成します。3桁バージョンに `.0` を付けます。更新には前回より大きいバージョンが必要です。Tauri、npm、デスクトップ Cargo のバージョンを合わせて更新します。
 
 Store 用 feature を有効にして NSIS を作らず、実行ファイル、ライセンス、アイコン、ビルドに必要な Microsoft の WebView2Loader.dll だけを新しい作業フォルダーへコピーします。設定・秘密鍵は含めません。SDK のマニフェスト検証を省略せず、実行ファイル、DLL、MSIX を Defender で検査します。検査できない場合や検出時は失敗します。
 
@@ -49,7 +49,7 @@ Store 用 feature を有効にして NSIS を作らず、実行ファイル、�
 1. 下記「申請の進捗と残りの操作」に従い、初回の申請・認定・公開を Partner Center で完了します。自動化は公開済みの申請を複製する方式のため、初回公開前には使用できません。
 2. Partner Center のアカウント設定で Microsoft Entra ID テナントを関連付けます。認証済みの Microsoft アカウントとは別に、アプリ用の認証連携が必要です。[公式の前提条件](https://learn.microsoft.com/en-us/windows/uwp/monetize/create-and-manage-submissions-using-windows-store-services#prerequisites) と [GitHub Actions の連携手順](https://learn.microsoft.com/en-us/windows/apps/publish/msstore-dev-cli/github-actions) を参照してください。
 3. Entra のアプリ登録でテナント ID、アプリケーションのクライアント ID、クライアントシークレットを用意し、Partner Center のユーザー管理からこの Entra アプリケーションに Manager 権限を割り当てます。シークレットは「シークレット ID」ではなく作成時の**値**を使用します。
-4. [リポジトリの Actions Secrets](https://github.com/Yumiiiiiiiiii/discord_To_VR/settings/secrets/actions) に次の3件を登録します。値をチャット、ソースコード、Actions のログに貼り付けないでください。
+4. [リポジトリの Actions Secrets](https://github.com/Yumiiiiiiiiii/DiToVR/settings/secrets/actions) に次の3件を登録します。値をチャット、ソースコード、Actions のログに貼り付けないでください。
 
 | Secret 名 | 内容 |
 | --- | --- |
@@ -60,7 +60,7 @@ Store 用 feature を有効にして NSIS を作らず、実行ファイル、�
 この実装は Microsoft Store Submission API を直接使用するため、CLI 用の `SELLER_ID` は不要です。シークレットには有効期限があるので、期限前に更新します。
 
 5. Store の価格が無料であることを確認します。この製品は無料配布専用として、API が基本価格を `Base` と返す場合も、更新時には明示的な `Free` を指定します。有料価格や有料の市場別価格がある場合は停止します。将来有料化するときは、この自動申請処理の変更が必要です。
-6. 初回公開・Store からの動作確認・認証設定が済んだら、[Actions Variables](https://github.com/Yumiiiiiiiiii/discord_To_VR/settings/variables/actions) に `MICROSOFT_STORE_PUBLISH_ENABLED` を作成し、値を `true` にします。申請を停止するときは `false` に変更します。
+6. 初回公開・Store からの動作確認・認証設定が済んだら、[Actions Variables](https://github.com/Yumiiiiiiiiii/DiToVR/settings/variables/actions) に `MICROSOFT_STORE_PUBLISH_ENABLED` を作成し、値を `true` にします。申請を停止するときは `false` に変更します。
 
 ### 次回以降の更新
 
@@ -80,7 +80,7 @@ API が作成した申請を Partner Center の画面で編集すると、その
 - 更新画面には Microsoft Store の「ライブラリ」を案内します。自動更新は Store 側で管理します。
 - `runFullTrust` は Discord のローカル RPC、XSOverlay、トレイ、ファイル選択、DPAPI に必要です。管理者権限は要求しません。
 - Windows 10 build 19041 以降、x64 向け。Microsoft Edge WebView2 Evergreen Runtime が必要です。未導入の場合は Microsoft 公式 Runtime を先に導入します。
-- 設定先は `%APPDATA%\discord-to-vr` です。MSIX の AppData 仮想化によりパッケージのユーザーデータ領域に保存される場合があります。GitHub 版との設定共有・移行は保証せず、初回案内から設定します。アンインストールは Windows のアプリ管理から行います。
+- 設定先は `%APPDATA%\DiToVR` です。MSIX の AppData 仮想化によりパッケージのユーザーデータ領域に保存される場合があります。GitHub 版との設定共有・移行は保証せず、初回案内から設定します。アンインストールは Windows のアプリ管理から行います。
 
 [登録文と審査手順](../store/LISTING.ja.md)、[プライバシーポリシー](PRIVACY.md) を用意しています。掲載用の4画像は `target/store-upload/images/` にある、ダミー情報のプレビューです。無料・PC 向けで申請します。プライバシーポリシーは Partner Center の本文入力で登録済みのため、別途公開 URL を用意する必要はありません。
 
@@ -98,7 +98,7 @@ Store 経由のインストール、二重起動、RPC、XSOverlay、更新、�
 
 ブラウザーのファイル選択操作がタイムアウトし、Windows のネイティブ操作接続も利用できなかったため、**パッケージと掲載画像はまだアップロードされていません**。認定への送信・公開も未実施です。次の操作が残っています。
 
-1. [パッケージ](https://partner.microsoft.com/ja-jp/dashboard/products/9NFDCGL30V3K/submissions/1152921505702221008/packages) のファイル選択で `D:\test\discxss\target\store-upload\DiscordToVR_0.2.1.0_x64.msix` を指定します。検証結果と制限付き機能 `runFullTrust` の理由欄を確認し、デバイスは Windows 10/11 Desktop を対象として保存します。
+1. [パッケージ](https://partner.microsoft.com/ja-jp/dashboard/products/9NFDCGL30V3K/submissions/1152921505702221008/packages) のファイル選択で `D:\test\discxss\target\store-upload\DiToVR_0.2.1.0_x64.msix` を指定します。検証結果と制限付き機能 `runFullTrust` の理由欄を確認し、デバイスは Windows 10/11 Desktop を対象として保存します。
 2. [日本語の Store 登録情報](https://partner.microsoft.com/ja-jp/dashboard/products/9NFDCGL30V3K/submissions/1152921505702221008/listings?languageid=17&languagecode=ja-jp) のデスクトップ用スクリーンショットに、`D:\test\discxss\target\store-upload\images` の `01-home.png`、`02-guide.png`、`03-whitelist.png`、`04-updates.png` を指定して保存します。画像以外の検査資料は添付しません。
 3. 概要画面の未完了・エラーを解消し、「送信して認定を受ける」を実行します。追加の規約への法的同意が表示された場合は、その時点で利用者本人に確認します。申請後のステータスで受け付けられたことを確認します。
 

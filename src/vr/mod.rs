@@ -11,8 +11,8 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::{interval, sleep, timeout, Instant};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-const XSOVERLAY_WS_URL: &str = "ws://127.0.0.1:42070/?client=discord_To_VR";
-const SENDER_NAME: &str = "discord_To_VR";
+const XSOVERLAY_WS_URL: &str = "ws://127.0.0.1:42070/?client=DiToVR";
+const SENDER_NAME: &str = "DiToVR";
 const QUEUE_CAPACITY: usize = 64;
 const MAX_ICON_BYTES: usize = 256 * 1024;
 const MAX_ICON_CACHE: usize = 64;

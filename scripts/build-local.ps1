@@ -36,7 +36,11 @@ if (!(Test-Path -LiteralPath (Join-Path $repoRoot 'node_modules/@tauri-apps/cli/
     throw 'Run npm.cmd ci before building.'
 }
 if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
-    $signingKey = Join-Path $env:LOCALAPPDATA 'DiscordToVR-release-signing/updater.key'
+    $signingKey = Join-Path $env:LOCALAPPDATA 'DiToVR-release-signing/updater.key'
+    if (!(Test-Path -LiteralPath $signingKey -PathType Leaf)) {
+        # Keep using the existing release key after the product rename.
+        $signingKey = Join-Path $env:LOCALAPPDATA 'DiscordToVR-release-signing/updater.key'
+    }
     if (!(Test-Path -LiteralPath $signingKey -PathType Leaf)) {
         throw 'Set TAURI_SIGNING_PRIVATE_KEY to your existing updater key. Do not regenerate the release key.'
     }

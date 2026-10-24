@@ -26,21 +26,24 @@ node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.m
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-hooks.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-rename.ps1
 ```
 
 この検証はワークスペースの `target` 内に作ったダミー設定だけを使います。実際のアプリや AppData は削除せず、設定を残す場合・自動更新時・明示的にデータ削除を選んだ場合を確認します。カスタム保存先の削除処理は `src-tauri/installer-hooks.nsh` にあり、Tauri 標準の削除チェックが選択され、更新モードでない場合だけ動作します。
 
 署名付き配布ビルドには更新用の秘密鍵が必要です。[ビルド・公開手順](#ローカルで署名付きビルドを作る) を参照してください。用意済みの GNU / LLVM-MinGW 環境を使うローカルビルドは `npm.cmd run desktop:build:local` で実行でき、既定では `target/tauri` に出力します。このコマンドは別の PC にコンパイラーを自動インストールするものではありません。
 
-[設定のサンプル](../config.example.json) は参照用です。GUI からの保存後は自動で接続を再開し、設定ファイルを直接編集した場合は再起動が必要です。画面だけを試すには `discord_To_VR.exe --ui-preview` を使います。プレビューはダミー情報で動き、Discord・XSOverlay への接続や設定の読み書きは行いません。
+[設定のサンプル](../config.example.json) は参照用です。GUI からの保存後は自動で接続を再開し、設定ファイルを直接編集した場合は再起動が必要です。画面だけを試すには `DiToVR.exe --ui-preview` を使います。プレビューはダミー情報で動き、Discord・XSOverlay への接続や設定の読み書きは行いません。
 
 `src/` は通知転送・設定保存などの共通ライブラリ、`src-tauri/` はアプリの起動とデスクトップ機能、`frontend/` は画面です。旧ネイティブ GUI とその起動用プログラムは削除し、起動先を Tauri 版に統一しています。
 
 ## 配布者の初回設定
 
-安定版タグの Actions は、npm と両方の Rust lockfile を監査し、Defender の定義を更新して、本体と setup を検査してから公開します。既知の脆弱性・検出・定義更新失敗・検査不能の場合は公開を止めます。Defender の検査結果は `discord-to-vr-security` の成果物に保存します。これは Windows のコード署名とは別の確認で、すべての PC で検出されないことを保証しません。0.2.1 の検出調査と Microsoft への再審査依頼用メモは [Windows Defender の検出調査](WINDOWS_DEFENDER.md) を参照してください。
+安定版タグの Actions は、npm と両方の Rust lockfile を監査し、Defender の定義を更新して、本体と setup を検査してから公開します。既知の脆弱性・検出・定義更新失敗・検査不能の場合は公開を止めます。Defender の検査結果は `ditovr-security` の成果物に保存します。これは Windows のコード署名とは別の確認で、すべての PC で検出されないことを保証しません。0.2.1 の検出調査と Microsoft への再審査依頼用メモは [Windows Defender の検出調査](WINDOWS_DEFENDER.md) を参照してください。
 
-Windows の発行元情報は `src-tauri/tauri.conf.json` の `bundle.publisher` で `Discord to VR` に設定しています。アプリ一覧の発行元、実行ファイルとインストーラーの会社名へ反映します。この値と Windows の Authenticode 署名は別のものです。UAC・SmartScreen の認証済み発行元にはコード署名証明書が必要で、更新用の署名鍵ではその表示を変更できません。NSIS は発行元をインストール先の記録にも使うため、公開後は同じ値を維持してください。
+Windows の発行元情報は `src-tauri/tauri.conf.json` の `bundle.publisher` で `DiToVR` に設定しています。アプリ一覧の発行元、実行ファイルとインストーラーの会社名へ反映します。この値と Windows の Authenticode 署名は別のものです。UAC・SmartScreen の認証済み発行元にはコード署名証明書が必要で、更新用の署名鍵ではその表示を変更できません。名称変更時は NSIS フックが旧名のインストールを `/UPDATE` で削除し、設定を保持して DiToVR に置き換えます。
+
+名称変更後の保存先は `%APPDATA%\DiToVR` です。旧 `%APPDATA%\discord-to-vr`、旧 Tauri 保存先、実行ファイル隣の設定の順に引き継ぎます。二重起動防止と WebView の保存領域を維持するため Tauri identifier は変更せず、Store package identity も予約済みの値を維持します。公開済みファイル名・過去の検出記録は当時の名称を残しています。旧インストールの置き換えでは、既存のスタートメニュー・デスクトップのショートカットだけを新しい起動先へ引き継ぎます。置き換えテストは `target` 内のダミーだけを使い、実際のレジストリやインストールには触れません。
 
 この環境では更新用鍵を生成し、公開鍵をアプリへ組み込みました。秘密鍵はリポジトリ外の次の場所に保存しています。
 
@@ -49,6 +52,8 @@ Windows の発行元情報は `src-tauri/tauri.conf.json` の `bundle.publisher`
 ```
 
 この鍵を安全な場所にバックアップしてください。公開済みアプリへの更新には同じ鍵が必要です。上書き生成やリポジトリへの追加、配布ファイルへの同梱、チャット・Issue への貼り付けはしないでください。
+
+ローカルビルドは `%LOCALAPPDATA%\DiToVR-release-signing\updater.key` を優先し、なければ上記の既存鍵を使います。名称変更だけを理由に鍵を生成し直す必要はありません。
 
 1. GitHub リポジトリの Settings → Secrets and variables → Actions で、`TAURI_SIGNING_PRIVATE_KEY` に秘密鍵ファイルの**内容**を登録します。ファイルのパスではありません。この環境の鍵はパスワードなしで生成したため、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` は未設定で構いません。
 2. `src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`package.json` と `package-lock.json` のアプリバージョンを揃えます。ルートの Cargo は共通ライブラリなので変更不要です。

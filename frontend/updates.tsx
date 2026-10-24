@@ -57,7 +57,7 @@ export function UpdatesPanel({status}:{status:UpdateStatus|null}) {
   return <div className="updates-page">
     <div className="page-heading"><div><h1>アプリの更新</h1><p>{storeManaged?"Microsoft Store から更新を受け取ります。":"新しいバージョンを自動でダウンロード・適用します。"}</p></div><span className="heading-icon"><Download size={27}/></span></div>
     <section className="settings-card update-card">
-      <div className="section-heading"><div><h2>現在のバージョン</h2><p>Discord to VR <strong>v{status?.currentVersion??"読み込み中"}</strong></p></div><ShieldCheck size={24}/></div>
+      <div className="section-heading"><div><h2>現在のバージョン</h2><p>DiToVR <strong>v{status?.currentVersion??"読み込み中"}</strong></p></div><ShieldCheck size={24}/></div>
       <div className="update-card-body">
         {status?.disabledReason&&<p className="update-info"><Info size={18}/>{status.disabledReason}</p>}
         {!storeManaged&&<>

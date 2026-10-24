@@ -5,6 +5,7 @@
 /node_modules/
 /dist/
 /latest.json
+/DiToVR-tauri.zip
 /discord_To_VR-tauri.zip
 /.playwright-mcp/
 **/*.pdb

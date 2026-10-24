@@ -1,8 +1,8 @@
-# Discord to VR プライバシーポリシー
+# DiToVR プライバシーポリシー
 
 最終更新: 2026年10月24日
 
-Discord to VR は、利用者が承認した Discord の通知を、同じ PC の XSOverlay に転送する Windows アプリです。
+DiToVR は、利用者が承認した Discord の通知を、同じ PC の XSOverlay に転送する Windows アプリです。
 
 ## 使用する情報
 
@@ -26,4 +26,4 @@ Store 版の配信・更新は Microsoft Store が管理します。GitHub 版�
 
 ## 問い合わせ
 
-[GitHub Issues](https://github.com/Yumiiiiiiiiii/discord_To_VR/issues) で受け付けます。公開の Issue に会話、トークン、Client Secret、設定ファイルを投稿しないでください。処理内容の変更時は本ポリシーと更新日を更新します。
+[GitHub Issues](https://github.com/Yumiiiiiiiiii/DiToVR/issues) で受け付けます。公開の Issue に会話、トークン、Client Secret、設定ファイルを投稿しないでください。処理内容の変更時は本ポリシーと更新日を更新します。

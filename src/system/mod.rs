@@ -33,7 +33,7 @@ pub fn report_error(message: &str) {
         eprintln!("❌ {message}");
     } else {
         let message: Vec<u16> = message.encode_utf16().chain(Some(0)).collect();
-        let title: Vec<u16> = "Discord → VR".encode_utf16().chain(Some(0)).collect();
+        let title: Vec<u16> = "DiToVR".encode_utf16().chain(Some(0)).collect();
         unsafe {
             MessageBoxW(
                 std::ptr::null_mut(),

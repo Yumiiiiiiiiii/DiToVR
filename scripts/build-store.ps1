@@ -33,14 +33,14 @@ $stage = Join-Path $output 'stage'
 New-Item -ItemType Directory -Path $output | Out-Null
 & node node_modules/@tauri-apps/cli/tauri.js icon src-tauri/icons/icon.svg --output $icons
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$exe = Join-Path $env:CARGO_TARGET_DIR 'release/discord_To_VR.exe'
+$exe = Join-Path $env:CARGO_TARGET_DIR 'release/DiToVR.exe'
 if ($CompilerRoot -and !(Test-Path -LiteralPath (Join-Path (Split-Path $exe -Parent) 'WebView2Loader.dll'))) {
     throw 'The GNU build requires WebView2Loader.dll beside the executable.'
 }
 & node scripts/store-manifest.mjs $stage $exe $icons
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $version = (Get-Content -Raw -Encoding UTF8 src-tauri/tauri.conf.json | ConvertFrom-Json).version
-$package = Join-Path $output "DiscordToVR_${version}.0_x64.msix"
+$package = Join-Path $output "DiToVR_${version}.0_x64.msix"
 $securityReport = Join-Path $output 'security-report.json'
 # Emit artifact paths before scanning so a failed scan report can be retained.
 if ($env:GITHUB_OUTPUT) {
@@ -50,7 +50,7 @@ if ($env:GITHUB_OUTPUT) {
 # Do not pass /nv: SDK schema/semantic validation is required.
 & $makeappx.FullName pack /d $stage /p $package /o
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$scanFiles = @((Join-Path $stage 'discord_To_VR.exe'), $package)
+$scanFiles = @((Join-Path $stage 'DiToVR.exe'), $package)
 $loader = Join-Path $stage 'WebView2Loader.dll'
 if (Test-Path -LiteralPath $loader) { $scanFiles += $loader }
 & (Join-Path $PSScriptRoot 'check-release-security.ps1') -Files $scanFiles -ReportPath $securityReport

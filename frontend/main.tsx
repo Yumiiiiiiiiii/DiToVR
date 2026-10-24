@@ -424,7 +424,7 @@ function App() {
           </span>
           <div>
             <strong>
-              Discord <span>→</span> VR
+              DiToVR
             </strong>
             <small>通知をつなぐ、小さな窓。</small>
           </div>
@@ -477,14 +477,14 @@ function App() {
             アプリを終了
           </button>
           <small className="version">
-            Discord to VR <span>v{updateStatus?.currentVersion??"0.2.1"}</span>
+            DiToVR <span>v{updateStatus?.currentVersion??"0.2.1"}</span>
           </small>
         </div>
       </aside>
       <div className="workspace">
         <header className="topbar">
           <div className="breadcrumb">
-            Discord to VR <ChevronRight size={13} />
+            DiToVR <ChevronRight size={13} />
             <span>{page === "home" ? "ホーム" : page === "tutorial" ? "使い方ガイド" : page === "debug" ? "受信診断" : page === "updates" ? "アプリの更新" : "設定"}</span>
           </div>
           <span className={`connection-pill ${ready ? "connected" : ""}`}>
@@ -1576,7 +1576,7 @@ function App() {
             </>
           )}
           <footer className="page-footer">
-            <span>Discord to VR</span>
+            <span>DiToVR</span>
             <span>いつもの通知を、いつものまま。</span>
           </footer>
         </main>
