@@ -1,0 +1,11 @@
+{
+  "version": "0.2.2",
+  "notes": "DiToVR 0.2.2。変更内容は GitHub Releases をご覧ください。",
+  "pub_date": "2026-10-27T08:57:48.604Z",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "https://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.2.2/DiToVR_0.2.2_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXF2bFdITWFOaVpjakdwZFRGTVFoRkVRM0hZcXZVSnloN29GRHYvSU9ySHJSMFR5V09YVjQwaC9MOUFFd1Zxb1U5OHBwaWo3Nm9JQnRzSktjRDE5V1Z3NmM0KzVZaFFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMDkxNDY4CWZpbGU6RGlUb1ZSXzAuMi4yX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjIuMgpubUZPSmx3R3lmejB3M28wbk0vMkVzVjc3QmlwM1VKemU2Uk1hTERESGhUS1VROEFmUlZkdTcyK1pneDNyWnlxMlhYMDBlWVRCVmtZdllGMEJzZVZBdz09Cg=="
+    }
+  }
+}
