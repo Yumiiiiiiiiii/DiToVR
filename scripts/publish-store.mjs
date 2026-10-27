@@ -2,6 +2,7 @@ import {readFile, appendFile} from "node:fs/promises";
 import {basename, join, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {createHash} from "node:crypto";
+import {execFileSync} from "node:child_process";
 import {setTimeout as sleep} from "node:timers/promises";
 import {singleFileZip, zipEntry} from "./store-archive.mjs";
 import {storeManifest} from "./store-manifest.mjs";
@@ -11,6 +12,15 @@ const apiRoot = "https://manage.devcenter.microsoft.com/v1.0/my";
 const accepted = new Set(["PreProcessing", "Certification", "PendingPublication", "Publishing", "Release", "Published"]);
 const failed = new Set(["Canceled", "CommitFailed", "PreProcessingFailed", "CertificationFailed", "PublishFailed", "ReleaseFailed"]);
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function storeReleaseTag(env) {
+  if (env.GITHUB_REPOSITORY !== repository || env.MICROSOFT_STORE_PUBLISH_ENABLED !== "true") throw new Error("Store submission requires this repository and explicit publication enablement.");
+  const automatic = env.GITHUB_EVENT_NAME === "push" && env.GITHUB_REF_TYPE === "tag";
+  const retry = env.GITHUB_EVENT_NAME === "workflow_dispatch" && env.STORE_SUBMISSION_TASK === "retry-submission";
+  const tag = automatic ? env.GITHUB_REF_NAME : retry ? env.STORE_RELEASE_TAG : undefined;
+  if (!/^v\d+\.\d+\.\d+$/.test(tag ?? "")) throw new Error("Store submission requires a version tag push or an explicit retry of an existing vX.Y.Z tag.");
+  return tag;
+}
 
 function versionParts(value) {
   if (!/^\d+\.\d+\.\d+\.\d+$/.test(value ?? "") || value.split(".").some(part => Number(part) > 65535)) throw new Error("Invalid Store package version.");
@@ -158,9 +168,17 @@ export async function publishStore(artifact, {client, wait = sleep, log = () => 
 }
 
 async function main() {
-  if (process.env.GITHUB_REPOSITORY !== repository || process.env.GITHUB_EVENT_NAME !== "push" || process.env.GITHUB_REF_TYPE !== "tag" || process.env.MICROSOFT_STORE_PUBLISH_ENABLED !== "true") throw new Error("Store submission is restricted to enabled release tag pushes in the original repository.");
+  const tag = storeReleaseTag(process.env);
+  const gitCommit = ref => execFileSync("git", ["rev-parse", "--verify", ref], {encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]}).trim();
+  if (gitCommit("HEAD") !== gitCommit(`refs/tags/${tag}^{commit}`)) throw new Error("The checked-out Store source does not match the requested release tag.");
   const config = JSON.parse(await readFile("src-tauri/tauri.conf.json", "utf8"));
-  const version = validateVersion(config, await readFile("src-tauri/Cargo.toml", "utf8"), JSON.parse(await readFile("package.json", "utf8")), process.env.GITHUB_REF_NAME);
+  const version = validateVersion(config, await readFile("src-tauri/Cargo.toml", "utf8"), JSON.parse(await readFile("package.json", "utf8")), tag);
+  const notes = await readFile(join("docs/release-notes", `${tag}.md`), "utf8");
+  if (!notes.trim() || notes.trim().length > 1500) throw new Error("Store release notes must contain 1-1500 characters of changes.");
+  if (process.argv.includes("--validate-release")) {
+    console.log(`Store source, version and release notes verified against ${tag}. No update was submitted.`);
+    return;
+  }
   const packagePath = process.env.STORE_PACKAGE_PATH;
   const reportPath = process.env.STORE_SECURITY_REPORT_PATH;
   if (!packagePath || !reportPath) throw new Error("Store build outputs are missing.");
@@ -168,7 +186,7 @@ async function main() {
     identity: JSON.parse(await readFile("store/identity.json", "utf8")), version,
     fileName: basename(packagePath), msix: await readFile(packagePath),
     report: JSON.parse(await readFile(reportPath, "utf8")),
-    notes: await readFile(join("docs/release-notes", `v${version}.md`), "utf8"),
+    notes,
   };
   const mask = value => console.log(`::add-mask::${value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}`);
   const client = createStoreClient({tenantId: process.env.AZURE_AD_TENANT_ID, clientId: process.env.AZURE_AD_APPLICATION_CLIENT_ID, clientSecret: process.env.AZURE_AD_APPLICATION_SECRET}, {mask});

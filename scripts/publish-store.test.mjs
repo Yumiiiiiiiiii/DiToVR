@@ -4,7 +4,22 @@ import {createHash} from "node:crypto";
 import {deflateRawSync} from "node:zlib";
 import {singleFileZip, zipEntry} from "./store-archive.mjs";
 import {storeManifest} from "./store-manifest.mjs";
-import {validateArtifact, updateSubmission, uploadUrl, createStoreClient, publishStore} from "./publish-store.mjs";
+import {validateArtifact, updateSubmission, uploadUrl, createStoreClient, publishStore, storeReleaseTag} from "./publish-store.mjs";
+
+test("publication requires an enabled version tag or an explicit retry, never a preview, fork or arbitrary ref", () => {
+  const enabled = {GITHUB_REPOSITORY: "Yumiiiiiiiiii/DiToVR", MICROSOFT_STORE_PUBLISH_ENABLED: "true"};
+  const automatic = {...enabled, GITHUB_EVENT_NAME: "push", GITHUB_REF_TYPE: "tag", GITHUB_REF_NAME: "v0.2.2"};
+  const retry = {...enabled, GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REF_TYPE: "branch", GITHUB_REF_NAME: "release", STORE_SUBMISSION_TASK: "retry-submission", STORE_RELEASE_TAG: "v0.2.2"};
+  assert.equal(storeReleaseTag(automatic), "v0.2.2");
+  assert.equal(storeReleaseTag(retry), "v0.2.2");
+  for (const env of [
+    {...automatic, GITHUB_REF_TYPE: "branch"}, {...automatic, GITHUB_REPOSITORY: "other/DiToVR"},
+    {...automatic, MICROSOFT_STORE_PUBLISH_ENABLED: "false"}, {...automatic, GITHUB_REF_NAME: "v0.2.2-beta"},
+    {...retry, STORE_SUBMISSION_TASK: "build"}, {...retry, STORE_SUBMISSION_TASK: "check-connection"},
+    {...retry, STORE_RELEASE_TAG: "release"}, {...retry, STORE_RELEASE_TAG: "v0.2.2\n--upload"},
+    {...retry, MICROSOFT_STORE_PUBLISH_ENABLED: "false"}, {...retry, GITHUB_EVENT_NAME: "pull_request"},
+  ]) assert.throws(() => storeReleaseTag(env));
+});
 
 const identity = {productId: "9NFDCGL30V3K", name: "NakYmi.DiscordtoVR", publisher: "CN=test-publisher", publisherDisplayName: "NakYmi"};
 const sas = "https://example.blob.core.windows.net/ingestion/archive?sig=secret-sas";
