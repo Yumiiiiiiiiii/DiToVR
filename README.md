@@ -6,15 +6,15 @@
 
 Discord デスクトップアプリの通知を [XSOverlay](https://store.steampowered.com/app/1173510/XSOverlay/) に転送する、Windows 用アプリです。ヘッドセットを外さずに DM やメンションを確認でき、配信中は会話の内容を隠す表示へ切り替えられます。
 
-[ダウンロード（Releases）](https://github.com/Yumiiiiiiiiii/DiToVR/releases) · [操作ガイド](docs/UI_GUIDE.md) · [更新について](docs/AUTO_UPDATE.md)
+[Microsoft Store から入手（無料）](https://apps.microsoft.com/detail/9NFDCGL30V3K) · [GitHub から入手](https://github.com/Yumiiiiiiiiii/DiToVR/releases) · [操作ガイド](docs/UI_GUIDE.md)
 
-Microsoft Store 版は公開準備中です。審査・公開が完了するまでは Releases からダウンロードしてください。[プライバシーポリシー](docs/PRIVACY.md)
+Microsoft Store 版を公開しました。Store 版の更新は Microsoft Store が管理します。GitHub のインストーラー版はアプリ内の自動更新を使用します。[更新について](docs/AUTO_UPDATE.md) · [プライバシーポリシー](docs/PRIVACY.md)
 
 本プロジェクトは、開発に生成 AI を使用しています。使用範囲と検証状況は [生成 AI の使用について](#生成-ai-の使用について) をご確認ください。
 
 ![ホーム画面。Discord と XSOverlay の接続状態、受信モード、通知の表示をまとめて確認できます](docs/images/home-light.png)
 
-この README は **0.2.1 の Windows アプリ**の機能を紹介します。画像は名称変更後のプレビューで、ダミー情報を使用しています。実際の会話や接続結果ではありません。名称変更は次の配布から反映されるため、Releases で公開済みの版とファイル名を確認してください。
+この README は **0.2.1 の Windows アプリ**の機能を紹介します。画像は名称変更後のプレビューで、ダミー情報を使用しています。実際の会話や接続結果ではありません。Store 版は DiToVR の名称で公開しています。GitHub の公開済みファイルは旧名のままの場合があります。
 
 ## こんなときに使えます
 
@@ -64,6 +64,8 @@ Microsoft Store 版は公開準備中です。審査・公開が完了するま�
 ![初回チュートリアルの画面。準備から接続確認まで順番に案内します](docs/images/tutorial-welcome.png)
 
 ### 更新は、ダウンロードから再起動まで自動
+
+Microsoft Store から入れた場合は、Store のアプリ自動更新を使用します。アプリの更新画面から Store の案内を確認できます。以下は GitHub のインストーラー版についての説明です。
 
 0.2.0 以降のインストーラー版は、新版の確認・ダウンロード・署名とバージョンの検証・適用・再起動まで自動で行います。設定入力中は適用を待ち、保存またはキャンセルで閉じると進みます。
 

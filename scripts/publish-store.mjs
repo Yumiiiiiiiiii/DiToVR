@@ -37,7 +37,7 @@ export function validateArtifact({identity, version, fileName, msix, report, not
   return sha256;
 }
 
-function validateApp(app, identity) {
+export function validateApp(app, identity) {
   if (app?.id !== identity.productId || app.packageIdentityName !== identity.name || app.publisherName?.toUpperCase() !== identity.publisher.toUpperCase()) throw new Error("Partner Center product identity does not match store/identity.json.");
   if (!app.lastPublishedApplicationSubmission?.id) throw new Error("Publish the first Store submission in Partner Center before enabling automatic updates.");
   if (app.pendingApplicationSubmission) throw new Error("A Store draft or submission is already pending. Resolve it in Partner Center; it will not be deleted or overwritten.");

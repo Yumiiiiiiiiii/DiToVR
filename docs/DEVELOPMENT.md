@@ -19,7 +19,7 @@ cargo test --locked
 cargo test --manifest-path src-tauri/Cargo.toml --locked --features custom-protocol
 cargo clippy --locked --all-targets -- -D warnings
 cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --features custom-protocol -- -D warnings
-node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs
+node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/check-store-connection.test.mjs
 ```
 
 インストーラーを一度ビルドすると、Tauri の NSIS を使ってアンインストール時の設定削除を検証できます。
