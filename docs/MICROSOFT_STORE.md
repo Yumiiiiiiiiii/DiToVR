@@ -101,7 +101,7 @@ Store 経由のインストール、二重起動、RPC、XSOverlay、更新、�
 
 申請済みパッケージと画像は `target/store-upload/DiToVR-0.2.1/` にあります。これはビルド成果物なので Git の管理対象外です。申請した未署名 MSIX の SHA-256 は `0f16b972f6823a926ae9ef68389736e9aba11c48857037082486e41d1e4996ef` です。
 
-自動申請スクリプトは Microsoft API を模したテストで、申請状態・掲載情報の保護、バージョン判定、アップロード前後の失敗、秘密情報のログ抑制を検証します。接続確認にも、読み取りだけを行うこと、公開済み情報に不備があると停止することのテストを用意しています。実際の Store API への読み取り専用接続は確認済みです。更新申請と新パッケージの検証は、次回のバージョンタグで行います。
+自動申請スクリプトは Microsoft API を模したテストで、申請状態・掲載情報の保護、バージョン判定、アップロード前後の失敗、秘密情報のログ抑制を検証します。接続確認にも、読み取りだけを行うこと、公開済み情報に不備があると停止することのテストを用意しています。実際の Store API への読み取り専用接続に加え、v0.2.2 のアップロード・更新申請が受け付けられることも確認済みです。Store 経由の更新と実機動作は別途確認が必要です。
 
 ## 公開状況と自動申請の設定結果
 
@@ -117,11 +117,26 @@ Partner Center への既存 Entra テナントの関連付けは完了してい�
 
 [読み取り専用接続確認 #2](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/40474826485)は成功しました。認証、製品 ID、発行者、公開済み申請 `1152921505702221008`、x64 バージョン `0.2.1.0`、無料価格、日本語掲載情報を確認し、Store ビルド・申請ジョブはスキップされています。初回は製品取得が HTTP 400 でしたが、関連付けと権限設定後の再確認で解消しました。
 
-GitHub Actions の Repository variable **`MICROSOFT_STORE_PUBLISH_ENABLED=true`** を保存し、自動申請を有効化しました。次回の `vX.Y.Z` タグ push で接続確認・ビルド・検査・更新申請を行い、Microsoft の審査通過後に公開します。今回の設定作業では、新しいタグ・バージョン・Store 申請は作成していません。読み取り専用テストでは申請の書き込みと新 MSIX の受理までは検証していません。
+GitHub Actions の Repository variable **`MICROSOFT_STORE_PUBLISH_ENABLED=true`** を保存し、自動申請を有効化しました。`vX.Y.Z` タグ push で接続確認・ビルド・検査・更新申請を行い、Microsoft の審査通過後に公開します。初期設定時の接続テストは読み取り専用で行い、その後の v0.2.2 で実際の更新申請を確認しました。
 
 画面証拠はローカルの `target/booth-update/evidence/` に保存しています（`tenant-associated.jpg`、`temporary-admin-removed.jpg`、`store-actions-manager-saved.jpg`、`store-connection-success.jpg`、`store-auto-submit-enabled.jpg`）。認証情報や秘密鍵は Git に含めません。
 
 Store からのインストール、起動、Discord 受信、XSOverlay 送信、トレイからの復帰、二重起動の防止、更新、アンインストールの実機確認は、公開状態の確認と別の作業です。
+
+## v0.2.2 の更新申請結果
+
+2026-10-27 に [Microsoft Store workflow #5](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/40477854907) が成功し、名称変更を含む `DiToVR_0.2.2.0_x64.msix` の更新申請が受け付けられました。既存の `v0.2.2` タグを指定する `retry-submission` を使用し、タグや GitHub Release は変更していません。
+
+- 申請 ID: `1152921505702243217`
+- 受付時の状態: `PreProcessing`（前処理中）。**認定・公開完了は未確認**です。
+- ワークフローのコミット: `f7ee2a177d5352e111489ea243157d961a4ce638`
+- 検証: バージョン照合、依存関係監査、Store 回帰テスト、MSIX ビルド、Microsoft Defender 検査、更新申請の全工程が成功しました。
+- Defender 定義: `1.461.224.0`。本体と MSIX の検出なしを確認しました。
+- 申請した MSIX の SHA-256: `66d9cebc2a8e40af765aa6b7ab8dda6aa657f2935c58f39b2cf3937f22c50c8d`
+
+掲載情報と審査情報を引き継ぎ、変更点は `docs/release-notes/v0.2.2.md` を使用しています。認定後に自動公開する設定です。次の申請前には Partner Center でこの申請の状態を確認し、処理中の申請を再作成しないでください。
+
+受付結果と検査レポートは、Git 管理対象外の `target/release-v0.2.2/evidence/store-accepted.json`、`store-retry-status.json`、`store-security-report.json` に保存しています。
 
 ## 公式資料
 
