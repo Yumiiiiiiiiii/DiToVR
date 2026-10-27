@@ -43,7 +43,7 @@ Store 用 feature を有効にして NSIS を作らず、実行ファイル、�
 | 「Run workflow」→ `build` | ビルド・検査のみ。手動実行からは申請しません |
 | 「Run workflow」→ `check-connection` | 認証と公開済み製品を読み取り専用で確認。ビルドも更新申請もしません |
 
-ユーザーが選択した運用は **バージョンタグでの自動申請**です。初回公開は完了しています。認証連携後に自動申請を有効化します。MSIX は Actions の成果物として保存し、GitHub Releases の添付ファイル構成は変更しません。
+ユーザーが選択した運用は **バージョンタグでの自動申請**です。初回公開と認証連携は完了し、自動申請を有効化しています。MSIX は Actions の成果物として保存し、GitHub Releases の添付ファイル構成は変更しません。
 
 ### 一度だけ行う設定
 
@@ -92,21 +92,25 @@ Store 経由のインストール、二重起動、RPC、XSOverlay、更新、�
 
 申請済みパッケージと画像は `target/store-upload/DiToVR-0.2.1/` にあります。これはビルド成果物なので Git の管理対象外です。申請した未署名 MSIX の SHA-256 は `0f16b972f6823a926ae9ef68389736e9aba11c48857037082486e41d1e4996ef` です。
 
-自動申請スクリプトは Microsoft API を模したテストで、申請状態・掲載情報の保護、バージョン判定、アップロード前後の失敗、秘密情報のログ抑制を検証します。接続確認にも、読み取りだけを行うこと、公開済み情報に不備があると停止することのテストを用意しています。実際の Store API への接続と更新申請は、Secrets 設定後にそれぞれ確認します。
+自動申請スクリプトは Microsoft API を模したテストで、申請状態・掲載情報の保護、バージョン判定、アップロード前後の失敗、秘密情報のログ抑制を検証します。接続確認にも、読み取りだけを行うこと、公開済み情報に不備があると停止することのテストを用意しています。実際の Store API への読み取り専用接続は確認済みです。更新申請と新パッケージの検証は、次回のバージョンタグで行います。
 
-## 公開状況と残りの設定
+## 公開状況と自動申請の設定結果
 
 2026-10-27 に Partner Center の製品概要で **「Microsoft Store で取り扱い中」** と「現在 Store に公開されている製品」の表示を確認しました。初回申請 ID は `1152921505702221008`、パッケージは `DiToVR_0.2.1.0_x64.msix` です。パッケージと日本語掲載画像4枚は登録済みです。初回申請をやり直す必要はありません。
 
 同日に Entra アプリケーション「DiToVR GitHub Actions」を登録し、Store 用 Secrets 3件を GitHub に保存しました。クライアントシークレットの有効期限は **2027-10-27** です。期限前に更新し、新しい値を GitHub Secrets へ保存してください。
 
-Partner Center へのテナント関連付けとアプリケーションへの Manager 権限付与は未完了です。職場アカウントの作成・初回サインインは完了しましたが、関連付け操作は権限エラーになりました。既存のグローバル管理者である外部 Microsoft アカウントは、「サインイン オプション → 組織にサインイン」で既存のテナントドメインを指定すると、Entra のユーザーとしてサインインできることを確認しました。新しい職場アカウントへの管理者権限追加は行っていません。
+Partner Center への既存 Entra テナントの関連付けは完了しています。ユーザーの承認を得て、職場アカウント「DiToVR Store Admin」に一時的なグローバル管理者権限を付与し、本人によるサインイン・本人確認後に「Tenant association complete」を確認しました。関連付け直後に一時権限を解除し、ディレクトリロールが割り当てられていない表示を確認済みです。既存管理者の権限は変更していません。
 
-所有者アカウントのスマートフォンによる本人確認は完了しました。関連付け用の認証画面は、テナントを指定しても既存管理者の個人用 Microsoft アカウントを拒否しました（`You can't sign in here with a personal account`）。管理者ではない職場アカウントを使うと、確定時に関連付け権限のエラーになります。職場アカウントへの一時的な管理者権限付与を次の候補としていますが、実施していません。自動申請はまだ有効化していません。関連付けと Manager 権限の設定後に `check-connection` を実行し、接続を確認してから有効化します。
+[公式のテナント関連付け手順](https://learn.microsoft.com/ja-jp/windows/apps/publish/partner-center/associate-existing-azure-ad-tenant-with-partner-center-account)では、関連付け自体にはグローバル管理者権限は不要とされています。今回は個人用 Microsoft アカウントでの認証制限と職場アカウントでの権限エラーがあり、一時付与後の手順で成功しました。一時付与が一般的に必要であることを示すものではありません。
 
-[公式のテナント関連付け手順](https://learn.microsoft.com/ja-jp/windows/apps/publish/partner-center/associate-existing-azure-ad-tenant-with-partner-center-account)では、関連付け自体にはグローバル管理者権限は不要で、Partner Center の Manager が操作できると説明されています。一方、現在の関連付け画面にはグローバル管理者向けの案内があり、上記の認証制限と権限エラーを確認しています。一時的な管理者権限はこの状況を調べるための候補であり、一般的な必須条件や解決済みの手順ではありません。実施する場合は対象と範囲を別途確認し、作業後に追加した権限を解除します。
+「DiToVR GitHub Actions」を Partner Center の Microsoft Entra applications に追加し、[Submission API の公式手順](https://learn.microsoft.com/en-us/windows/uwp/monetize/create-and-manage-submissions-using-windows-store-services#how-to-associate-an-azure-ad-application-with-your-partner-center-account)に従って **Manager(Windows)** を設定しました。これは Partner Center のロールで、Entra のグローバル管理者とは別です。製品別のカスタム権限画面も確認しましたが、API の指定ロールを使用しています。このロールはアカウント設定・ユーザー管理を含むため、Actions の編集権限と Secrets を管理してください。
 
-[初回の読み取り専用接続確認](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/40468355438)では、認証トークンを取得した後の Store 製品情報取得が HTTP 400 で停止しました。Store の下書き・公開情報は変更しておらず、MSIX のビルド・更新申請も実行していません。関連付けと権限設定が済んだら同じ確認を再実行します。
+[読み取り専用接続確認 #2](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/40474826485)は成功しました。認証、製品 ID、発行者、公開済み申請 `1152921505702221008`、x64 バージョン `0.2.1.0`、無料価格、日本語掲載情報を確認し、Store ビルド・申請ジョブはスキップされています。初回は製品取得が HTTP 400 でしたが、関連付けと権限設定後の再確認で解消しました。
+
+GitHub Actions の Repository variable **`MICROSOFT_STORE_PUBLISH_ENABLED=true`** を保存し、自動申請を有効化しました。次回の `vX.Y.Z` タグ push で接続確認・ビルド・検査・更新申請を行い、Microsoft の審査通過後に公開します。今回の設定作業では、新しいタグ・バージョン・Store 申請は作成していません。読み取り専用テストでは申請の書き込みと新 MSIX の受理までは検証していません。
+
+画面証拠はローカルの `target/booth-update/evidence/` に保存しています（`tenant-associated.jpg`、`temporary-admin-removed.jpg`、`store-actions-manager-saved.jpg`、`store-connection-success.jpg`、`store-auto-submit-enabled.jpg`）。認証情報や秘密鍵は Git に含めません。
 
 Store からのインストール、起動、Discord 受信、XSOverlay 送信、トレイからの復帰、二重起動の防止、更新、アンインストールの実機確認は、公開状態の確認と別の作業です。
 
