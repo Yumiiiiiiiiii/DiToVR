@@ -14,7 +14,7 @@ Microsoft Store 版を公開しました。Store 版の更新は Microsoft Store
 
 ![ホーム画面。Discord と XSOverlay の接続状態、受信モード、通知の表示をまとめて確認できます](docs/images/home-light.png)
 
-この README は **0.2.1 の Windows アプリ**の機能を紹介します。画像は名称変更後のプレビューで、ダミー情報を使用しています。実際の会話や接続結果ではありません。Store 版は DiToVR の名称で公開しています。GitHub の公開済みファイルは旧名のままの場合があります。
+この README は **0.2.2 の Windows アプリ**の機能を紹介します。画像はダミー情報を使用したプレビューです。実際の会話や接続結果ではありません。GitHub 版・Store 版ともに DiToVR の名称を使用します。0.2.1 以前の配布ファイルには旧名称が残ります。
 
 ## こんなときに使えます
 
