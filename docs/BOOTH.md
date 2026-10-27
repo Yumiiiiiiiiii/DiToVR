@@ -12,13 +12,15 @@ VRの中でも、Discordの連絡を確認。
 
 DiToVR は、Discord デスクトップアプリの通知を XSOverlay に届ける、無料の Windows アプリです。ヘッドセットを外さずに、DM やメンションの通知を確認できます。
 
-■ 最新版はこちら（無料）
+■ ダウンロード・インストール（無料）
 
-Microsoft Store
+このページの「無料ダウンロード」から Windows 用インストーラーを入手できます。
+DiToVR_0.2.1_x64-setup.zip を展開し、中の Discord.to.VR_0.2.1_x64-setup.exe を実行してください。
+
+BOOTH 版は GitHub で公開済みの v0.2.1 と同じインストーラーです。アプリ内には旧名称の表記が残っています。無料版・応援用ともに同じファイルです。
+
+Microsoft Store からも無料でインストールできます。Store 版の更新は Microsoft Store が管理します。
 https://apps.microsoft.com/detail/9NFDCGL30V3K
-
-Store 版の更新は Microsoft Store が管理します。
-BOOTH のダウンロードは導入ガイドです。最新版のアプリは上の Store から入手してください。
 
 ■ 3つのできること
 
@@ -35,7 +37,7 @@ DM やメンションを確認できます。サーバーからの通知には�
 
 ■ はじめ方
 
-1. Microsoft Store から DiToVR をインストールします。
+1. BOOTH の ZIP を展開して setup.exe を実行するか、Microsoft Store から DiToVR をインストールします。
 2. Discord・SteamVR・XSOverlay を起動し、XSOverlay の通知用 WebSocket を有効にします。
 3. DiToVR の初回チュートリアルに沿って接続し、テスト通知を確認します。
 
@@ -83,10 +85,12 @@ https://github.com/Yumiiiiiiiiii/DiToVR/issues
 
 ## 配布内容
 
-無料: 「無料・導入ガイド（アプリはStoreから）」
+無料: 「無料版（Windows用インストーラー）」
 
-応援用: 「応援用（無料版と同じ導入ガイド）」、価格は既存の200円を維持。
+応援用: 「応援用（無料版と同じインストーラー）」、価格は既存の200円を維持。
 
-どちらも Store のリンクと設定手順を含む `DiToVR_Getting_Started.zip` を配布します。旧0.1.0のインストーラーは案内ファイルに置き換えます。署名されていない Store 申請用 MSIX は添付しません。
+どちらも実際のインストーラーを含む `DiToVR_0.2.1_x64-setup.zip` を配布します。中身は GitHub の v0.2.1 と SHA-256 が一致する `Discord.to.VR_0.2.1_x64-setup.exe`（`fae1fb8ddcf811fc05fa25fdad860ae459858d73549a3a7669604c48bce7985d`）です。BOOTH の対応形式に合わせて ZIP に収めています。案内 TXT だけの ZIP は配布対象から外しました。署名されていない Store 申請用 MSIX は添付しません。
+
+2026-10-27、Defender 定義 `1.461.217.0` でインストーラーとアプリ本体を検査し、どちらも脅威の検出なしでした。これは当該定義での検査結果で、全環境で警告が出ない保証ではありません。
 
 紹介画像は表紙、通知の設定、初回設定の順。元の画面プレビューと書き出し用ファイルはローカルの `target/booth-update/` に保管します。
