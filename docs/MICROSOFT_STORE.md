@@ -131,7 +131,7 @@ Store からのインストール、起動、Discord 受信、XSOverlay 送信�
 2026-10-27 に [Microsoft Store workflow #5](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/40477854907) が成功し、名称変更を含む `DiToVR_0.2.2.0_x64.msix` の更新申請が受け付けられました。既存の `v0.2.2` タグを指定する `retry-submission` を使用し、タグや GitHub Release は変更していません。
 
 - 申請 ID: `1152921505702243217`
-- 受付時の状態: `PreProcessing`（前処理中）。**認定・公開完了は未確認**です。
+- 受付時の状態: `PreProcessing`（前処理中）。2026-11-04 の次回申請前に、Partner Center で公開済み（Submission 2）であることを確認しました。
 - ワークフローのコミット: `f7ee2a177d5352e111489ea243157d961a4ce638`
 - 検証: バージョン照合、依存関係監査、Store 回帰テスト、MSIX ビルド、Microsoft Defender 検査、更新申請の全工程が成功しました。
 - Defender 定義: `1.461.224.0`。本体と MSIX の検出なしを確認しました。
@@ -140,6 +140,19 @@ Store からのインストール、起動、Discord 受信、XSOverlay 送信�
 掲載情報と審査情報を引き継ぎ、変更点は `docs/release-notes/v0.2.2.md` を使用しています。認定後に自動公開する設定です。次の申請前には Partner Center でこの申請の状態を確認し、処理中の申請を再作成しないでください。
 
 受付結果と検査レポートは、Git 管理対象外の `target/release-v0.2.2/evidence/store-accepted.json`、`store-retry-status.json`、`store-security-report.json` に保存しています。
+
+## v0.2.21 の Store 専用更新申請結果
+
+2026-11-04 に [Microsoft Store workflow](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/41705416566) が成功し、アプリ内更新機能を削除した `DiToVR_0.2.21.0_x64.msix` の申請が受け付けられました。`store-v0.2.21` タグを使用し、GitHub Releases・更新フィード・BOOTH の配布ファイルは更新していません。
+
+- 申請 ID: `1152921505702308182`
+- 受付状態: `PreProcessing`（前処理中）。Partner Center でも Submission 3 の前処理中・認定後に自動公開する設定を確認しました。**公開完了は未確認**です。
+- ソースのコミット: `eee43626ce554eaa788f0f6f8967bb5ba92f21a6`
+- 検証: Windows チェック、依存関係監査、Store 回帰テスト、MSIX ビルド、Defender 検査、更新申請が成功しました。
+- Defender 定義: `1.463.110.0`。本体と MSIX は検出なしでした。
+- MSIX SHA-256: `b355c189355655cf0e28a4332f654c38086d8ebbe9d4a9b00691f124a5f29bf1`
+
+変更点には `docs/release-notes/store-v0.2.21.md` を使用しています。ローカルの受付記録と検査レポートは Git 管理対象外の `target/store-only-v0.2.21/` に保存しています。処理中の申請を再作成せず、公開状態は Partner Center で確認してください。
 
 ## 公式資料
 
