@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { version } from "../package.json";
 export type ReceiveMode = "normal" | "whitelist" | "auto";
 export type ThemePreference = "system" | "light" | "dark";
 export type BotStatus =
@@ -14,6 +15,8 @@ export type BotStatus =
   | "missing_user"
   | "account_mismatch";
 export interface Status {
+  currentVersion: string;
+  storeManaged: boolean;
   theme: ThemePreference;
   discord: number;
   overlay: boolean;
@@ -88,6 +91,8 @@ export function channelIdFromInput(text: string): string | null {
   return id;
 }
 const previewStatus: Status = {
+  currentVersion: version,
+  storeManaged: new URLSearchParams(location.search).get("distribution") === "store",
   theme: "system",
   discord: 2,
   overlay: true,
@@ -143,13 +148,13 @@ export async function api<T>(
   args?: Record<string, unknown>,
 ): Promise<T> {
   if (desktop) return invoke<T>(command, args);
+  if (previewStatus.storeManaged && ["get_update_status", "set_auto_update", "check_updates"].includes(command)) throw "Microsoft Store 版にアプリ内の更新機能はありません。";
   if (["get_debug_snapshot","clear_debug_events","run_debug_receive_test"].includes(command) && !previewStatus.debugEnabled) throw "この操作は -debug を付けて起動した場合だけ使えます。";
   // Browser preview is isolated: it never accesses files, accounts or services.
   switch (command) {
     case "preview_theme": return undefined as T;
     case "get_update_status": {
-      const storeManaged=new URLSearchParams(location.search).get("distribution")==="store";
-      return {currentVersion:"0.2.1",storeManaged,autoUpdate:storeManaged?false:previewAutoUpdate,supported:false,canCheck:false,disabledReason:storeManaged?"このアプリの更新は Microsoft Store が管理します。Microsoft Store の「ライブラリ」で更新を確認できます。":"画面プレビューでは更新の通信・適用を行いません。",phase:"idle",version:null,notes:null,downloaded:0,total:null,checkedAtMs:null,message:null} as T;
+      return {currentVersion:version,storeManaged:false,autoUpdate:previewAutoUpdate,supported:false,canCheck:false,disabledReason:"画面プレビューでは更新の通信・適用を行いません。",phase:"idle",version:null,notes:null,downloaded:0,total:null,checkedAtMs:null,message:null} as T;
     }
     case "set_auto_update": previewAutoUpdate=Boolean(args?.enabled); return undefined as T;
     case "check_updates": throw "画面プレビューでは更新の通信・適用を行いません。";

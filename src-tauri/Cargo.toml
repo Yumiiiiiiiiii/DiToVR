@@ -1,6 +1,6 @@
 [package]
 name = "ditovr-desktop"
-version = "0.2.2"
+version = "0.2.21"
 edition = "2021"
 description = "Discord notifications in VR — Tauri desktop app"
 

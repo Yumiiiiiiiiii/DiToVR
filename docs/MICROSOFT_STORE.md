@@ -40,9 +40,10 @@ Store 用 feature を有効にして NSIS を作らず、実行ファイル、�
 | --- | --- |
 | `release` ブランチへの push | Store 用 MSIX のビルド・テスト・Defender 検査・Actions 成果物への保存 |
 | `vX.Y.Z` タグへの push | 有効化済みの場合、接続確認に成功してからビルド・検査・Store 更新申請 |
+| `store-vX.Y.Z` タグへの push | Store のみビルド・検査・更新申請。GitHub Releases と GitHub 版の更新情報は変更しません |
 | 「Run workflow」→ `build` | ビルド・検査のみ。申請しません |
 | 「Run workflow」→ `check-connection` | 認証と公開済み製品を読み取り専用で確認。ビルドも更新申請もしません |
-| 「Run workflow」→ `retry-submission` | 指定した既存の `vX.Y.Z` タグを再ビルド・検査して Store 申請。自動申請の有効化が必要です |
+| 「Run workflow」→ `retry-submission` | 指定した既存の `vX.Y.Z` または `store-vX.Y.Z` タグを再ビルド・検査して Store 申請。自動申請の有効化が必要です |
 
 ユーザーが選択した運用は **バージョンタグでの自動申請**です。初回公開と認証連携は完了し、自動申請を有効化しています。MSIX は Actions の成果物として保存し、GitHub Releases の添付ファイル構成は変更しません。
 
@@ -73,6 +74,8 @@ Store 用 feature を有効にして NSIS を作らず、実行ファイル、�
 4. Actions が Store 版テスト、MSIX ビルド、SDK 検証、Defender 検査を行い、検査レポートの SHA-256 と実際の MSIX・内包マニフェストを確認します。その後、公開済みの掲載文・画像・審査メモを引き継いで x64 パッケージを置き換え、認定へ送信します。他のアーキテクチャのパッケージは保持します。
 5. Actions のサマリーで申請 ID と受付状態を確認します。**受付成功は公開完了ではありません**。Microsoft の処理・認定が通ると自動公開され、その後の利用者への更新配信は Store が管理します。
 
+Store のみ更新するときは、通常タグの代わりに `store-v0.2.21` のようなタグを使い、変更点を `docs/release-notes/store-v0.2.21.md` に記載します。バージョンは同じく Tauri・npm・デスクトップ Cargo で揃え、公開済みパッケージより大きくします。Store 専用タグでは通常の Release workflow は起動せず、GitHub Releases・更新フィード・BOOTH の配布ファイルは変更されません。コードを `release` ブランチへ反映するコミットに `[skip ci]` を付ければ、ブランチ push のビルドも抑制できます。申請用タグのコミットには `[skip ci]` を付けないでください。
+
 既存の下書き・審査中の申請がある場合、バージョンの再利用・巻き戻し、識別情報の不一致、検査失敗時には自動申請を停止します。下書きを自動削除しません。アップロードや commit の途中で失敗・タイムアウトした場合は、ログの申請 ID を使って Partner Center の状態を先に確認してください。同じタグの再実行で未完了の申請を上書きすることはありません。
 
 API が作成した申請を Partner Center の画面で編集すると、その申請を API から commit できなくなる場合があります。自動処理中の手動編集は避け、失敗時は状態を確認したうえで Partner Center で対応してください。認証情報、アクセストークン、アップロード用 SAS URL は成果物に保存しません。
@@ -88,7 +91,7 @@ Store のテストは先に `npm run build` で `dist` を生成します。Taur
 ## 動作と検証
 
 - Store feature または Windows パッケージ ID がある場合、GitHub 更新の確認・取得・NSIS 起動・更新設定の書き込みを拒否します。パッケージ ID 確認の予期しないエラー時も GitHub 更新を無効にします。
-- 更新画面には Microsoft Store の「ライブラリ」を案内します。自動更新は Store 側で管理します。
+- アプリ内の「アプリの更新」メニュー・更新画面・更新通知は表示しません。独自の更新処理と IPC コマンドは Store ビルドから除外し、更新プラグインの登録や更新設定ファイルの読み込み・移行も行いません。現在のバージョンは通常のアプリ状態からサイドバー下部に表示します。更新は Microsoft Store の「ライブラリ」で管理します。
 - `runFullTrust` は Discord のローカル RPC、XSOverlay、トレイ、ファイル選択、DPAPI に必要です。管理者権限は要求しません。
 - Windows 10 build 19041 以降、x64 向け。Microsoft Edge WebView2 Evergreen Runtime が必要です。未導入の場合は Microsoft 公式 Runtime を先に導入します。
 - 設定先は `%APPDATA%\DiToVR` です。MSIX の AppData 仮想化によりパッケージのユーザーデータ領域に保存される場合があります。GitHub 版との設定共有・移行は保証せず、初回案内から設定します。アンインストールは Windows のアプリ管理から行います。

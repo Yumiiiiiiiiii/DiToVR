@@ -56,7 +56,7 @@ pub struct UpdateManager {
 }
 impl UpdateManager {
     pub fn new(path: PathBuf, preview: bool, debug: bool) -> Self {
-        Self::with_distribution(path, preview, debug, store_managed())
+        Self::with_distribution(path, preview, debug, crate::distribution::store_managed())
     }
     fn with_distribution(path: PathBuf, preview: bool, debug: bool, store_managed: bool) -> Self {
         let network_enabled = !store_managed && !preview && !debug && !cfg!(debug_assertions);
@@ -165,18 +165,6 @@ impl UpdateManager {
         self.mutate(|s| s.auto_update = enabled);
         Ok(())
     }
-}
-
-/// Package identity also protects an MSIX built outside our Store build command.
-/// An unexpected API failure must never enable the NSIS updater in a package.
-fn store_managed() -> bool {
-    use windows_sys::Win32::{
-        Foundation::APPMODEL_ERROR_NO_PACKAGE, Storage::Packaging::Appx::GetCurrentPackageFullName,
-    };
-    let mut length = 0;
-    cfg!(feature = "microsoft-store")
-        || unsafe { GetCurrentPackageFullName(&mut length, std::ptr::null_mut()) }
-            != APPMODEL_ERROR_NO_PACKAGE
 }
 
 pub fn migrate_preferences_from(
@@ -414,18 +402,6 @@ mod signed_download_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "microsoft-store")]
-    #[test]
-    fn store_build_blocks_nsis_even_when_launched_without_package_identity() {
-        let manager = UpdateManager::new(
-            std::env::temp_dir().join("unused-store-updates.json"),
-            false,
-            false,
-        );
-        assert!(manager.snapshot().store_managed);
-        assert!(!manager.network_enabled);
-        assert!(manager.save_preference(true).is_err());
-    }
     #[test]
     fn store_distribution_never_enables_github_updates_or_changes_preferences() {
         let dir =

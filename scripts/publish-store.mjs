@@ -13,12 +13,17 @@ const accepted = new Set(["PreProcessing", "Certification", "PendingPublication"
 const failed = new Set(["Canceled", "CommitFailed", "PreProcessingFailed", "CertificationFailed", "PublishFailed", "ReleaseFailed"]);
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export function storeVersionTag(tag) {
+  if (typeof tag !== "string" || !/^(?:store-)?v\d+\.\d+\.\d+$/.test(tag)) throw new Error("Store submission requires an existing vX.Y.Z or store-vX.Y.Z tag.");
+  return tag.replace(/^store-/, "");
+}
+
 export function storeReleaseTag(env) {
   if (env.GITHUB_REPOSITORY !== repository || env.MICROSOFT_STORE_PUBLISH_ENABLED !== "true") throw new Error("Store submission requires this repository and explicit publication enablement.");
   const automatic = env.GITHUB_EVENT_NAME === "push" && env.GITHUB_REF_TYPE === "tag";
   const retry = env.GITHUB_EVENT_NAME === "workflow_dispatch" && env.STORE_SUBMISSION_TASK === "retry-submission";
   const tag = automatic ? env.GITHUB_REF_NAME : retry ? env.STORE_RELEASE_TAG : undefined;
-  if (!/^v\d+\.\d+\.\d+$/.test(tag ?? "")) throw new Error("Store submission requires a version tag push or an explicit retry of an existing vX.Y.Z tag.");
+  storeVersionTag(tag);
   return tag;
 }
 
@@ -172,7 +177,7 @@ async function main() {
   const gitCommit = ref => execFileSync("git", ["rev-parse", "--verify", ref], {encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]}).trim();
   if (gitCommit("HEAD") !== gitCommit(`refs/tags/${tag}^{commit}`)) throw new Error("The checked-out Store source does not match the requested release tag.");
   const config = JSON.parse(await readFile("src-tauri/tauri.conf.json", "utf8"));
-  const version = validateVersion(config, await readFile("src-tauri/Cargo.toml", "utf8"), JSON.parse(await readFile("package.json", "utf8")), tag);
+  const version = validateVersion(config, await readFile("src-tauri/Cargo.toml", "utf8"), JSON.parse(await readFile("package.json", "utf8")), storeVersionTag(tag));
   const notes = await readFile(join("docs/release-notes", `${tag}.md`), "utf8");
   if (!notes.trim() || notes.trim().length > 1500) throw new Error("Store release notes must contain 1-1500 characters of changes.");
   if (process.argv.includes("--validate-release")) {

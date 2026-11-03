@@ -4,7 +4,9 @@ import {createHash} from "node:crypto";
 import {deflateRawSync} from "node:zlib";
 import {singleFileZip, zipEntry} from "./store-archive.mjs";
 import {storeManifest} from "./store-manifest.mjs";
-import {validateArtifact, updateSubmission, uploadUrl, createStoreClient, publishStore, storeReleaseTag} from "./publish-store.mjs";
+import {validateArtifact, updateSubmission, uploadUrl, createStoreClient, publishStore, storeReleaseTag, storeVersionTag} from "./publish-store.mjs";
+import {validateVersion} from "./release-manifest.mjs";
+import {readFileSync} from "node:fs";
 
 test("publication requires an enabled version tag or an explicit retry, never a preview, fork or arbitrary ref", () => {
   const enabled = {GITHUB_REPOSITORY: "Yumiiiiiiiiii/DiToVR", MICROSOFT_STORE_PUBLISH_ENABLED: "true"};
@@ -12,13 +14,29 @@ test("publication requires an enabled version tag or an explicit retry, never a 
   const retry = {...enabled, GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REF_TYPE: "branch", GITHUB_REF_NAME: "release", STORE_SUBMISSION_TASK: "retry-submission", STORE_RELEASE_TAG: "v0.2.2"};
   assert.equal(storeReleaseTag(automatic), "v0.2.2");
   assert.equal(storeReleaseTag(retry), "v0.2.2");
+  assert.equal(storeReleaseTag({...automatic, GITHUB_REF_NAME: "store-v0.2.21"}), "store-v0.2.21");
+  assert.equal(storeReleaseTag({...retry, STORE_RELEASE_TAG: "store-v0.2.21"}), "store-v0.2.21");
   for (const env of [
     {...automatic, GITHUB_REF_TYPE: "branch"}, {...automatic, GITHUB_REPOSITORY: "other/DiToVR"},
     {...automatic, MICROSOFT_STORE_PUBLISH_ENABLED: "false"}, {...automatic, GITHUB_REF_NAME: "v0.2.2-beta"},
     {...retry, STORE_SUBMISSION_TASK: "build"}, {...retry, STORE_SUBMISSION_TASK: "check-connection"},
     {...retry, STORE_RELEASE_TAG: "release"}, {...retry, STORE_RELEASE_TAG: "v0.2.2\n--upload"},
+    {...retry, STORE_RELEASE_TAG: "store-v0.2.21-beta"}, {...automatic, GITHUB_REF_NAME: "refs/tags/store-v0.2.21"},
     {...retry, MICROSOFT_STORE_PUBLISH_ENABLED: "false"}, {...retry, GITHUB_EVENT_NAME: "pull_request"},
   ]) assert.throws(() => storeReleaseTag(env));
+});
+
+test("Store-only tags validate the application version without becoming normal release tags", () => {
+  assert.equal(storeVersionTag("store-v0.2.21"), "v0.2.21");
+  assert.equal(storeVersionTag("v0.2.21"), "v0.2.21");
+  for (const tag of [undefined, "store-v0.2.21\n", "store-v0.2.21/other", "store-store-v0.2.21", "store-v0.2", "store-v0.2.21-beta"]) assert.throws(() => storeVersionTag(tag));
+  const config = JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+  config.version = "0.2.21";
+  const cargo = 'version = "0.2.21"';
+  const pkg = {version: "0.2.21"};
+  assert.equal(validateVersion(config, cargo, pkg, storeVersionTag("store-v0.2.21")), "0.2.21");
+  assert.throws(() => validateVersion(config, cargo, pkg, storeVersionTag("store-v0.2.22")), /match/);
+  assert.throws(() => validateVersion(config, cargo, pkg, "store-v0.2.21"), /match/);
 });
 
 const identity = {productId: "9NFDCGL30V3K", name: "NakYmi.DiscordtoVR", publisher: "CN=test-publisher", publisherDisplayName: "NakYmi"};
