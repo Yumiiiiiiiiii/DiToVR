@@ -3,7 +3,7 @@ name: Microsoft Store
 on:
   push:
     branches: [release]
-    tags: ['v*']
+    tags: ['v*', 'store-v*']
   workflow_dispatch:
     inputs:
       task:
@@ -12,7 +12,7 @@ on:
         options: [build, check-connection, retry-submission]
         default: build
       release_tag:
-        description: Existing version tag to retry (retry-submission only, for example v0.2.2)
+        description: Existing version tag to retry (vX.Y.Z or store-vX.Y.Z)
         type: string
         required: false
 
@@ -50,8 +50,8 @@ jobs:
         env:
           STORE_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          if ($env:STORE_RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
-            throw 'retry-submission requires an existing vX.Y.Z release tag.'
+          if ($env:STORE_RELEASE_TAG -notmatch '^(store-)?v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw 'retry-submission requires an existing vX.Y.Z or store-vX.Y.Z tag.'
           }
       - uses: actions/checkout@v4
         with:
@@ -80,11 +80,12 @@ jobs:
             node target/store-automation/scripts/publish-store.mjs --validate-release
             exit $LASTEXITCODE
           }
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            node scripts/publish-store.mjs --validate-release
+            exit $LASTEXITCODE
+          }
           node scripts/release-manifest.mjs --validate
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($env:GITHUB_REF_TYPE -eq 'tag' -and !(Test-Path -LiteralPath "docs/release-notes/$($env:GITHUB_REF_NAME).md" -PathType Leaf)) {
-            throw 'Write the changes since the previous release in docs/release-notes before submitting.'
-          }
       - name: Audit tagged Store dependencies
         if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.task == 'retry-submission')
         run: ./scripts/audit-release-dependencies.ps1

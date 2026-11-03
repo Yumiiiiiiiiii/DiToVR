@@ -54,6 +54,8 @@ type Form = Settings & {
   clearBotToken: boolean;
 };
 const emptyStatus: Status = {
+  currentVersion: "",
+  storeManaged: true,
   theme: "system",
   discord: 0,
   overlay: false,
@@ -111,10 +113,10 @@ const botLabels = {
 };
 
 function App() {
-  const updateStatus=useUpdateStatus();
   const [page, setPage] = useState<Page>("home");
   const [tab, setTab] = useState<Tab>("display");
   const [status, setStatus] = useState<Status>(emptyStatus);
+  const updateStatus=useUpdateStatus(!status.storeManaged);
   const [form, setForm] = useState<Form | null>(null);
   const theme = form?.theme ?? status.theme;
   useEffect(() => {
@@ -191,6 +193,7 @@ function App() {
     finally {setBusy(false);await refresh();}
   }
   async function openUpdates() {
+    if (status.storeManaged) return;
     setBusy(true);
     try {
       if(page==="settings"||page==="tutorial")await api("cancel_settings");
@@ -454,7 +457,7 @@ function App() {
             <Settings2 size={18} />
             設定{page === "settings" && <span className="nav-dot" />}
           </button>
-          <button className={page==="updates"?"active":""} disabled={busy||page==="updates"} onClick={()=>void openUpdates()}><Download size={18}/>アプリの更新</button>
+          {!status.storeManaged&&<button className={page==="updates"?"active":""} disabled={busy||page==="updates"} onClick={()=>void openUpdates()}><Download size={18}/>アプリの更新</button>}
         </nav>
         <div className="sidebar-bottom">
           <div className="mode-indicator">
@@ -477,7 +480,7 @@ function App() {
             アプリを終了
           </button>
           <small className="version">
-            DiToVR <span>v{updateStatus?.currentVersion??"0.2.1"}</span>
+            DiToVR <span>{status.currentVersion?`v${status.currentVersion}`:"読み込み中"}</span>
           </small>
         </div>
       </aside>
@@ -497,7 +500,7 @@ function App() {
           </span>
         </header>
         <main className="main-content">
-          {page!=="updates"&&<UpdateNotice status={updateStatus} onOpen={()=>void openUpdates()}/>}
+          {!status.storeManaged&&page!=="updates"&&<UpdateNotice status={updateStatus} onOpen={()=>void openUpdates()}/>}
           {status.preview && (
             <div className="preview-banner">
               <Info size={15} />
@@ -511,7 +514,7 @@ function App() {
               {status.problem}
             </div>
           )}
-          {page === "updates" ? <UpdatesPanel status={updateStatus}/> : page === "debug" && status.debugEnabled ? (
+          {page === "updates" && !status.storeManaged ? <UpdatesPanel status={updateStatus}/> : page === "debug" && status.debugEnabled ? (
             <DiagnosticsPanel status={status} onSetup={()=>void (status.configured?settings("discord"):tutorial())} onWhitelist={()=>void settings("whitelist")}/>
           ) : page === "tutorial" && tutorialSettings ? (
             <Onboarding initial={tutorialSettings} status={status} busy={busy} resumeConnection={tutorialResume} onSave={saveTutorial} onEdit={() => api<Settings>("get_settings")} onFinish={finishTutorial} onLater={cancel} />

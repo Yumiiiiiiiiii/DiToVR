@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod app;
+mod distribution;
 mod paths;
+#[cfg(not(feature = "microsoft-store"))]
 mod updater;
 use ditovr_core::{config, system};
 use tauri::Manager;
@@ -40,12 +42,18 @@ fn main() {
             }
         }
     }
-    let result = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // Must be first: secondary launches exit before settings, services or updates start.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             app::restore(app);
-        }))
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        }));
+    #[cfg(not(feature = "microsoft-store"))]
+    let builder = if distribution::store_managed() {
+        builder
+    } else {
+        builder.plugin(tauri_plugin_updater::Builder::new().build())
+    };
+    let result = builder
         .invoke_handler(tauri::generate_handler![
             app::get_status,
             app::get_debug_snapshot,
@@ -65,8 +73,11 @@ fn main() {
             app::browse_sound,
             app::hide_to_tray,
             app::exit_app,
+            #[cfg(not(feature = "microsoft-store"))]
             updater::get_update_status,
+            #[cfg(not(feature = "microsoft-store"))]
             updater::check_updates,
+            #[cfg(not(feature = "microsoft-store"))]
             updater::set_auto_update,
         ])
         .setup(move |host| {
@@ -76,28 +87,30 @@ fn main() {
             let renamed_directory = handle.path().config_dir()?.join(paths::PREVIOUS_CONFIG_DIRECTORY);
             let path = directory.join("config.json");
             let mut migration_problem = None;
-            let mut update_migration_failed = false;
             if !preview {
                 std::fs::create_dir_all(&directory)?;
                 let legacy = config::get_config_path();
                 if paths::migrate_config(&path, &[&renamed_directory.join("config.json"), &previous_directory.join("config.json"), &legacy]).is_err() {
                     migration_problem = Some("旧設定を移行できませんでした。以前の AppData フォルダー、実行ファイルと同じフォルダーの config.json、新しい保存先を確認してください。旧ファイルは変更していません。".into());
                 }
-                update_migration_failed = updater::migrate_preferences_from(
-                    &[&renamed_directory.join("updates.json"), &previous_directory.join("updates.json")], &directory.join("updates.json"),
-                ).is_err();
                 config::set_config_path(path.clone())?;
             }
             let state = app::AppState::new(path, preview, settings, launch_mode, migration_problem, debug_enabled);
             host.manage(state.clone());
-            let updates = updater::UpdateManager::new(
-                directory.join("updates.json"), preview, debug_enabled,
-            );
-            if update_migration_failed {
-                updates.report_migration_failure();
+            #[cfg(not(feature = "microsoft-store"))]
+            if !distribution::store_managed() {
+                let update_migration_failed = !preview && updater::migrate_preferences_from(
+                    &[&renamed_directory.join("updates.json"), &previous_directory.join("updates.json")], &directory.join("updates.json"),
+                ).is_err();
+                let updates = updater::UpdateManager::new(
+                    directory.join("updates.json"), preview, debug_enabled,
+                );
+                if update_migration_failed {
+                    updates.report_migration_failure();
+                }
+                host.manage(updates.clone());
+                updater::start(handle.clone(), updates);
             }
-            host.manage(updates.clone());
-            updater::start(handle.clone(), updates);
             app::install_tray(&handle, &state);
             tauri::async_runtime::spawn(async move {
                 state.start(&handle).await;

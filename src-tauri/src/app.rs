@@ -72,6 +72,8 @@ impl Services {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
+    current_version: &'static str,
+    store_managed: bool,
     theme: ThemePreference,
     discord: u8,
     overlay: bool,
@@ -271,6 +273,7 @@ impl AppState {
         self.start_locked(app, &mut controller).await;
     }
     /// Atomically postpone installation while a settings form is open.
+    #[cfg(not(feature = "microsoft-store"))]
     pub async fn prepare_update(&self) -> bool {
         let mut controller = self.controller.lock().await;
         if controller.paused {
@@ -283,6 +286,7 @@ impl AppState {
         }
         true
     }
+    #[cfg(not(feature = "microsoft-store"))]
     pub async fn cancel_update(&self, app: &AppHandle) {
         self.updating.store(false, Ordering::SeqCst);
         self.resume(app).await;
@@ -392,6 +396,8 @@ impl AppState {
     async fn status(&self) -> Status {
         let controller = self.controller.lock().await;
         Status {
+            current_version: env!("CARGO_PKG_VERSION"),
+            store_managed: crate::distribution::store_managed(),
             theme: controller.config.theme,
             discord: self.discord.load(Ordering::SeqCst),
             overlay: if self.preview {
@@ -975,6 +981,11 @@ mod tests {
         assert!(state.status().await.overlay);
         let debug_state = AppState::new(PathBuf::new(), true, false, None, None, true);
         let status = debug_state.status().await;
+        assert_eq!(status.current_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(status.store_managed, crate::distribution::store_managed());
+        let public_status = serde_json::to_value(&status).unwrap();
+        assert_eq!(public_status["currentVersion"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(public_status["storeManaged"], status.store_managed);
         assert!(status.debug_enabled);
         assert!(!status.overlay);
         let log = Diagnostics::default();
@@ -1005,6 +1016,7 @@ mod tests {
             .contains("テスト用サンプル"));
     }
     #[tokio::test]
+    #[cfg(not(feature = "microsoft-store"))]
     async fn update_installation_waits_for_settings_and_blocks_resuming_services() {
         let editing = AppState::new(PathBuf::new(), true, true, None, None, false);
         assert!(!editing.prepare_update().await);
