@@ -43,6 +43,7 @@ import {
 } from "./bridge";
 import "./styles.css";
 import { Onboarding } from "./onboarding";
+import { NotificationModeChoices } from "./notification-mode";
 import { DiagnosticsPanel } from "./diagnostics";
 import { UpdatesPanel, UpdateNotice, useUpdateStatus } from "./updates";
 
@@ -59,7 +60,8 @@ const emptyStatus: Status = {
   theme: "system",
   discord: 0,
   overlay: false,
-  privacy: false,
+  soundOnly: false,
+  soundReady: false,
   configured: false,
   paused: false,
   tray: false,
@@ -262,12 +264,17 @@ function App() {
     const timer = setTimeout(() => setToast(null), 5000);
     return () => clearTimeout(timer);
   }, [toast]);
-  async function mode(privacy: boolean) {
+  async function mode(soundOnly: boolean) {
+    if (soundOnly && !status.soundReady) {
+      await settings("sound");
+      setForm(previous => previous ? { ...previous, soundOnly: true } : previous);
+      return;
+    }
     setBusy(true);
-    setStatus((previous) => ({ ...previous, privacy }));
+
     try {
-      await api("set_privacy", { enabled: privacy });
-      notify("表示モードを保存しました。次回もこのモードで起動します。");
+      await api("set_sound_only", { enabled: soundOnly });
+      notify("通知モードを保存しました。次回もこのモードで起動します。");
     } catch (e) {
       notify(errorMessage(e), true);
     } finally {
@@ -339,7 +346,7 @@ function App() {
         )
       )
         setTab("whitelist");
-      else if (["volumePercent", "notificationSound"].includes(field))
+      else if (["volumePercent", "notificationSound", "soundOnly"].includes(field))
         setTab("sound");
       else if (field) setTab("display");
       setTimeout(
@@ -461,10 +468,10 @@ function App() {
         </nav>
         <div className="sidebar-bottom">
           <div className="mode-indicator">
-            <ShieldCheck size={19} />
+            {status.soundOnly ? <Volume2 size={19} /> : <MessageCircle size={19} />}
             <div>
-              <span>現在の表示モード</span>
-              <strong>{status.privacy ? "配信用表示" : "通常表示"}</strong>
+              <span>現在の通知モード</span>
+              <strong>{status.soundOnly ? "通知音のみ" : "通常表示"}</strong>
             </div>
           </div>
           <div className="local-note">
@@ -725,7 +732,7 @@ function App() {
               <section className="display-card">
                 <div className="section-heading">
                   <div>
-                    <h2>通知の表示</h2>
+                    <h2>通知モード</h2>
                     <p>選んだモードは、次の起動でも引き継がれます。</p>
                   </div>
                   <span className="subtle-tag">
@@ -734,58 +741,22 @@ function App() {
                   </span>
                 </div>
                 <div className="display-body">
-                  <div className="mode-options">
-                    <button
-                      className={`mode-option ${!status.privacy ? "selected" : ""}`}
-                      aria-pressed={!status.privacy}
-                      disabled={busy || !status.configured}
-                      onClick={() => void mode(false)}
-                    >
-                      <span className="mode-option-icon">
-                        <MessageCircle size={22} />
-                      </span>
-                      <span>
-                        <strong>通常表示</strong>
-                        <small>名前・本文・アイコンを表示</small>
-                      </span>
-                      <span className="radio-check">
-                        {!status.privacy && <Check size={12} strokeWidth={3} />}
-                      </span>
-                    </button>
-                    <button
-                      className={`mode-option ${status.privacy ? "selected" : ""}`}
-                      aria-pressed={status.privacy}
-                      disabled={busy || !status.configured}
-                      onClick={() => void mode(true)}
-                    >
-                      <span className="mode-option-icon">
-                        <Shield size={22} />
-                      </span>
-                      <span>
-                        <strong>配信用表示</strong>
-                        <small>名前・本文・アイコンを隠す</small>
-                      </span>
-                      <span className="radio-check">
-                        {status.privacy && <Check size={12} strokeWidth={3} />}
-                      </span>
-                    </button>
+                  <div>
+                    <NotificationModeChoices name="home-mode" value={status.soundOnly} onChange={value => void mode(value)} disabled={busy || !status.configured} />
                     <div className="mode-hint">
-                      <ShieldCheck size={14} />
+                      <Volume2 size={14} />
                       <span>
-                        {status.privacy
-                          ? "配信中も、会話の内容を画面に出しません。"
-                          : "自分だけで使うときにおすすめです。"}
+                        {status.soundReady ? "保存した通知音と音量を使います。" : "通知音のみを選ぶと、音と音量の設定が開きます。"}
+                        {" "}<button className="tutorial-text-button" disabled={busy} onClick={() => void settings("sound")}>通知音を設定</button>
                       </span>
                     </div>
                   </div>
                   <div className="notification-stage">
                     <div className="stage-label">
                       <Sparkles size={12} />
-                      表示プレビュー<span>サンプル</span>
+                      通知のイメージ<span>サンプル</span>
                     </div>
-                    <div
-                      className={`notification-sample ${status.privacy ? "private" : ""}`}
-                    >
+                    {status.soundOnly ? <div className="audio-only-preview"><Volume2 size={32} /><strong>通知音のみ</strong><p>VR に通知は表示されません。<br />保存した通知音が鳴ります。</p></div> : <div className="notification-sample">
                       <div className="sample-top">
                         <span>
                           <MessageCircle size={12} />
@@ -794,32 +765,28 @@ function App() {
                         <small>たった今</small>
                       </div>
                       <div className="sample-message">
-                        {!status.privacy && (
-                          <div className="sample-avatar">S</div>
-                        )}
+                        <div className="sample-avatar">S</div>
                         <div>
                           <strong>
-                            {status.privacy ? "新しい通知" : "サンプルさん"}
+                            サンプルさん
                           </strong>
-                          {!status.privacy && <p className="sample-context">サンプルサーバー / #general</p>}
+                          <p className="sample-context">サンプルサーバー / #general</p>
                           <p>
-                            {status.privacy
-                              ? "新しいメッセージがあります"
-                              : "こんにちは！ VR の中でも届きます。"}
+                            こんにちは！ VR の中でも届きます。
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </div>}
                     <div className="stage-caption">
-                      {status.privacy
-                        ? "送信者名・会話の場所・本文・アイコンは表示されません"
+                      {status.soundOnly
+                        ? "ここでは音は鳴りません。下のテスト通知で確認できます"
                         : "VR に表示される通知のイメージです"}
                     </div>
                   </div>
                 </div>
                 <div className="display-caution">
                   <Info size={14} />
-                  切り替え前に送信した通知や、送信中の通知は消去できません。
+                  通知音のみでも XSOverlay への接続が必要です。すでに表示された通知は消えません。
                 </div>
               </section>
               <div className="test-card">
@@ -827,7 +794,7 @@ function App() {
                   <Bell size={21} />
                 </span>
                 <div>
-                  <h3>VR 内の表示を確認</h3>
+                  <h3>{status.soundOnly ? "通知音を確認" : "VR 内の表示と通知音を確認"}</h3>
                   <p>
                     {status.debugEnabled
                       ? "VR の表示テストは、-debug を付けずに起動してください。"
@@ -842,7 +809,7 @@ function App() {
                   onClick={() =>
                     void action(
                       "send_test",
-                      "送信待ちに追加しました。VR 内の表示を確認してください。",
+                      status.soundOnly ? "送信待ちに追加しました。通知音を確認してください。" : "送信待ちに追加しました。VR 内の表示と通知音を確認してください。",
                     )
                   }
                 >
@@ -1253,24 +1220,6 @@ function App() {
                         2000,
                         "文字",
                       )}
-                      <div className="setting-row">
-                        <div>
-                          <label htmlFor="privacyMode">配信用表示</label>
-                          <p>送信者名・サーバー名・チャンネル名・本文・アイコンを隠します。</p>
-                        </div>
-                        <button
-                          type="button"
-                          id="privacyMode"
-                          role="switch"
-                          aria-checked={form.privacyMode}
-                          className={`switch ${form.privacyMode ? "on" : ""}`}
-                          onClick={() =>
-                            change("privacyMode", !form.privacyMode)
-                          }
-                        >
-                          <span />
-                        </button>
-                      </div>
                     </section>
                     <section
                       className="settings-card"
@@ -1285,6 +1234,11 @@ function App() {
                           <p>音と、VR を終了したときの動作を調整します。</p>
                         </div>
                         <Volume2 size={21} />
+                      </div>
+                      <div className="sound-section">
+                        <label>通知モード</label>
+                        <NotificationModeChoices name="soundOnly" value={form.soundOnly} onChange={value => change("soundOnly", value)} disabled={busy} className="mode-options-inline" />
+                        <p className="sound-help">{form.soundOnly ? "音だけでお知らせします。下で通知音を選び、音量を1%以上にしてください。" : "通知を VR に表示します。通知音は無音にもできます。"}</p>
                       </div>
                       <div className="sound-section">
                         <label>通知音</label>
@@ -1340,11 +1294,13 @@ function App() {
                             );
                           })}
                         </div>
+                        <p className="sound-help">MP3・WAV・Ogg Vorbis に対応。16 MiB・120秒以下。MP3・WAV は自動変換し、元ファイルは変更しません。</p>
                         {!["", "default"].includes(form.notificationSound) && (
                           <div className="file-field">
                             <input
                               name="notificationSound"
                               aria-label="通知音のファイル"
+                              aria-invalid={fieldError("notificationSound")}
                               readOnly
                               value={
                                 form.notificationSound === "file"
@@ -1391,6 +1347,8 @@ function App() {
                             max="100"
                             value={form.volumePercent}
                             disabled={!form.notificationSound}
+                            aria-invalid={fieldError("volumePercent")}
+                            aria-valuetext={`${form.volumePercent}%`}
                             onChange={(e) =>
                               change("volumePercent", Number(e.target.value))
                             }
@@ -1413,12 +1371,12 @@ function App() {
                           id="autoExitWithVr"
                           role="switch"
                           aria-checked={form.autoExitWithVr}
-                          className={`switch ${form.autoExitWithVr ? "on" : ""}`}
+                          className="switch-hit-area"
                           onClick={() =>
                             change("autoExitWithVr", !form.autoExitWithVr)
                           }
                         >
-                          <span />
+                          <span className={`switch ${form.autoExitWithVr ? "on" : ""}`} aria-hidden="true"><span /></span>
                         </button>
                       </div>
                     </section>

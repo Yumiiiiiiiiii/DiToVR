@@ -606,7 +606,19 @@ button {
   width: 100%;
   text-align: left;
   background: var(--surface);
+  cursor: pointer;
 }
+.mode-option.disabled { cursor: default; }
+.mode-option:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.mode-option > span:nth-child(2) { flex: 1; min-width: 0; }
+.mode-radio { width: 24px; height: 24px; margin: 0; flex: none; accent-color: var(--accent); }
+.mode-options-inline { flex-direction: row; }
+.mode-options-inline > .mode-option { flex: 1; min-width: 0; }
+.sound-help { color: var(--muted); margin: 12px 0 0; }
+.audio-only-preview { display: grid; justify-items: center; gap: 12px; padding: 24px 12px; text-align: center; }
+.audio-only-preview > svg { color: var(--accent); }
+.audio-only-preview p { margin: 0; color: var(--muted); }
+@media (max-width: 920px) { .mode-options-inline { flex-direction: column; } }
 .mode-option:hover:not(:disabled) {
   border-color: var(--accent-border);
 }
@@ -926,7 +938,7 @@ button {
   width: 88px;
   text-align: center;
 }
-.settings-form input:not([type="range"]) {
+.settings-form input:not([type="range"]):not([type="radio"]) {
   background: var(--input);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -944,7 +956,16 @@ button {
 .settings-form input::placeholder {
   color: var(--faint);
 }
+.switch-hit-area {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: transparent;
+}
 .switch {
+  display: block;
   width: 37px;
   height: 21px;
   flex: none;
@@ -1050,7 +1071,9 @@ button {
 .volume-control input {
   accent-color: var(--accent);
   width: 145px;
+  height: 44px;
 }
+#tutorial-volume { height: 44px; }
 .volume-control output {
   font-size: 11px;
   min-width: 34px;
@@ -1308,6 +1331,7 @@ button {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
+  .mode-options-inline { grid-template-columns: 1fr; }
   .mode-hint {
     grid-column: 1/-1;
   }
@@ -1490,7 +1514,7 @@ button {
 .settings-footer > span {
   font-size: 11px;
 }
-.settings-form input:not([type="range"]) {
+.settings-form input:not([type="range"]):not([type="radio"]) {
   font-size: 13px;
 }
 .sound-options strong {

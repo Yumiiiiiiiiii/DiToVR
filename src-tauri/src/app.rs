@@ -1,4 +1,5 @@
 use ditovr_core::{
+    audio,
     config::{self, Config, ThemePreference},
     diagnostics::{Diagnostics, Snapshot, Source},
     discord::{
@@ -30,7 +31,7 @@ type TrayModes = Option<(CheckMenuItem<tauri::Wry>, CheckMenuItem<tauri::Wry>)>;
 #[derive(Clone)]
 pub struct AppState {
     path: Arc<PathBuf>,
-    privacy: Arc<AtomicBool>,
+    sound_only: Arc<AtomicBool>,
     discord: Arc<AtomicU8>,
     tray: Arc<AtomicBool>,
     controller: Arc<Mutex<Controller>>,
@@ -77,7 +78,8 @@ pub struct Status {
     theme: ThemePreference,
     discord: u8,
     overlay: bool,
-    privacy: bool,
+    sound_only: bool,
+    sound_ready: bool,
     configured: bool,
     paused: bool,
     tray: bool,
@@ -106,7 +108,7 @@ pub struct Settings {
     max_title_length: usize,
     max_content_length: usize,
     notification_sound: String,
-    privacy_mode: bool,
+    sound_only: bool,
     auto_exit_with_vr: bool,
     whitelist_channel_ids: Vec<String>,
     receive_mode: ReceiveMode,
@@ -126,7 +128,8 @@ pub struct SettingsInput {
     max_title_length: usize,
     max_content_length: usize,
     notification_sound: String,
-    privacy_mode: bool,
+    #[serde(default)]
+    sound_only: bool,
     auto_exit_with_vr: bool,
     whitelist_channel_ids: Vec<String>,
     receive_mode: ReceiveMode,
@@ -154,6 +157,7 @@ impl FormError {
             "CLIENT_SECRET" => "clientSecret",
             "REDIRECT_URI" => "redirectUri",
             "NOTIFICATION_VOLUME" => "volumePercent",
+            "NOTIFICATION_SOUND_ONLY" => "soundOnly",
             "NOTIFICATION_TIMEOUT" => "notificationTimeout",
             "MAX_TITLE_LENGTH" => "maxTitleLength",
             "WHITELIST_CHANNEL_IDS" => "whitelistChannelIds",
@@ -169,6 +173,7 @@ impl FormError {
                 "有効な HTTP(S) URL を入力し、Portal の Redirects と一致させてください。"
             }
             "volumePercent" => "音量は 0 ～ 100% にしてください。",
+            "soundOnly" => "通知音のみを使うには、通知音を選び音量を1%以上にしてください。",
             "notificationTimeout" => "表示時間は 1 ～ 30 秒にしてください。",
             "maxTitleLength" => "タイトル文字数は 10 ～ 200 にしてください。",
             "whitelistChannelIds" => {
@@ -185,7 +190,7 @@ impl FormError {
         }
     }
 }
-fn public_settings(cfg: &Config, privacy: bool) -> Settings {
+fn public_settings(cfg: &Config) -> Settings {
     Settings {
         theme: cfg.theme,
         client_id: if cfg.client_id == "YOUR_CLIENT_ID_HERE" {
@@ -200,7 +205,7 @@ fn public_settings(cfg: &Config, privacy: bool) -> Settings {
         max_title_length: cfg.max_title_length,
         max_content_length: cfg.max_content_length,
         notification_sound: cfg.notification_sound.clone(),
-        privacy_mode: privacy,
+        sound_only: cfg.notification_sound_only,
         auto_exit_with_vr: cfg.auto_exit_with_vr,
         whitelist_channel_ids: cfg.whitelist_channel_ids.clone(),
         receive_mode: cfg.receive_mode,
@@ -227,17 +232,27 @@ impl AppState {
         } else {
             config::setup_defaults(&path)
         };
-        let (mut cfg,problem) = match loaded { Ok(cfg)=>(cfg,None), Err(_)=>(Config::default(),Some("設定を読み込めませんでした。設定ファイルを確認してください。元のファイルは上書きしません。".into())) };
-        if let Some(mode) = mode {
-            cfg.privacy_mode = mode;
-            if !preview && cfg.validate().is_ok() {
-                let _ = config::save_privacy_at(&path, mode);
+        let (mut cfg,mut problem) = match loaded { Ok(cfg)=>(cfg,None), Err(_)=>(Config::default(),Some("設定を読み込めませんでした。設定ファイルを確認してください。元のファイルは上書きしません。".into())) };
+        if let Some(enabled) = mode {
+            let mut next = cfg.clone();
+            next.notification_sound_only = enabled;
+            match next.validate() {
+                Err(message) => problem = Some(message.into()),
+                Ok(()) if preview => cfg = next,
+                Ok(()) => match config::save_sound_only_at(&path, enabled) {
+                    Ok(()) => cfg = next,
+                    Err(_) => {
+                        problem = Some(
+                            "通知モードを保存できませんでした。保存先を確認してください。".into(),
+                        )
+                    }
+                },
             }
         }
         let receive_control = ReceiveControl::new(&cfg);
         Self {
             path: Arc::new(path),
-            privacy: Arc::new(AtomicBool::new(cfg.privacy_mode)),
+            sound_only: Arc::new(AtomicBool::new(cfg.notification_sound_only)),
             discord: Arc::new(AtomicU8::new(if preview { 2 } else { 0 })),
             tray: Arc::new(AtomicBool::new(false)),
             controller: Arc::new(Mutex::new(Controller {
@@ -313,6 +328,14 @@ impl AppState {
         let diagnostic_only = self.diagnostics.is_some();
         if diagnostic_only {
             cfg.log_message_content = false;
+        } else {
+            match prepare_notification_sound(&self.path, cfg.notification_sound.clone()).await {
+                Ok(sound) => cfg.notification_sound = sound,
+                Err(message) => {
+                    controller.problem = Some(message);
+                    cfg.notification_sound.clear();
+                }
+            }
         }
         let http = match reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
@@ -329,10 +352,10 @@ impl AppState {
             }
         };
         let (sender, rx, overlay) = if diagnostic_only {
-            let (sender, rx) = vr::create_diagnostic_channel(http.clone(), self.privacy.clone());
+            let (sender, rx) = vr::create_diagnostic_channel(http.clone(), self.sound_only.clone());
             (sender, rx, Arc::new(AtomicBool::new(false)))
         } else {
-            vr::create_xsoverlay_channel(http.clone(), self.privacy.clone())
+            vr::create_xsoverlay_channel(http.clone(), self.sound_only.clone())
         };
         let sender = if let Some(log) = &self.diagnostics {
             sender.with_trace(log.trace(Source::System))
@@ -341,10 +364,9 @@ impl AppState {
         };
         let overlay_sender = sender.clone();
         let overlay_status = overlay.clone();
-        let privacy = self.privacy.clone();
         let mut tasks = vec![tokio::spawn(async move {
             if diagnostic_only {
-                vr::receive_diagnostic_loop(rx, privacy).await;
+                vr::receive_diagnostic_loop(rx).await;
             } else {
                 vr::xsoverlay_loop(rx, overlay_status, overlay_sender).await;
             }
@@ -408,7 +430,9 @@ impl AppState {
                     .as_ref()
                     .is_some_and(|s| s.overlay.load(Ordering::SeqCst))
             },
-            privacy: self.privacy.load(Ordering::SeqCst),
+            sound_only: self.sound_only.load(Ordering::SeqCst),
+            sound_ready: !controller.config.notification_sound.is_empty()
+                && controller.config.notification_volume > 0.0,
             configured: controller.config.validate().is_ok(),
             paused: controller.paused,
             tray: self.tray_available(),
@@ -432,29 +456,41 @@ impl AppState {
         }
     }
     fn sync_tray(&self, app: &AppHandle) {
-        let privacy = self.privacy.load(Ordering::SeqCst);
+        let sound_only = self.sound_only.load(Ordering::SeqCst);
         let menus = self.tray_modes.lock().ok().and_then(|m| m.clone());
-        if let Some((normal, private)) = menus {
-            let _ = normal.set_checked(!privacy);
-            let _ = private.set_checked(privacy);
+        if let Some((normal, audio)) = menus {
+            let _ = normal.set_checked(!sound_only);
+            let _ = audio.set_checked(sound_only);
         }
         if let Some(tray) = app.tray_by_id("main-tray") {
-            let _ = tray.set_tooltip(Some(if privacy {
-                "DiToVR · 配信用表示"
+            let _ = tray.set_tooltip(Some(if sound_only {
+                "DiToVR · 通知音のみ"
             } else {
                 "DiToVR · 通常表示"
             }));
         }
     }
-    async fn privacy(&self, app: &AppHandle, enabled: bool) -> Result<(), String> {
-        self.privacy.store(enabled, Ordering::SeqCst);
-        self.sync_tray(app);
-        if self.preview {
-            return Ok(());
+
+    async fn notification_mode(&self, app: &AppHandle, enabled: bool) -> Result<(), String> {
+        let mut controller = self.controller.lock().await;
+        if controller.paused || self.updating.load(Ordering::SeqCst) {
+            return Err("設定を閉じてから通知モードを切り替えてください。".into());
         }
-        config::save_privacy_at(&self.path, enabled).map_err(|_| {
-            "切り替えましたが保存できません。設定ファイルと保存先を確認してください。".into()
-        })
+        let mut cfg = controller.config.clone();
+        cfg.notification_sound_only = enabled;
+        cfg.validate().map_err(String::from)?;
+        if !self.preview {
+            if enabled {
+                prepare_notification_sound(&self.path, cfg.notification_sound.clone()).await?;
+            }
+            config::save_sound_only_at(&self.path, enabled).map_err(|_| {
+                "通知モードを保存できませんでした。保存先を確認してください。".to_string()
+            })?;
+        }
+        controller.config.notification_sound_only = enabled;
+        self.sound_only.store(enabled, Ordering::SeqCst);
+        self.sync_tray(app);
+        Ok(())
     }
 }
 fn debug_log(state: &AppState) -> Result<&Diagnostics, String> {
@@ -503,16 +539,17 @@ async fn simulate_receive(
         TestPresence::Offline => BotStatus::Offline,
         TestPresence::Unknown => BotStatus::Unknown,
     });
-    let privacy = cfg.privacy_mode;
     let http = reqwest::Client::new();
-    let (sender, mut rx) =
-        vr::create_diagnostic_channel(http.clone(), Arc::new(AtomicBool::new(privacy)));
+    let (sender, mut rx) = vr::create_diagnostic_channel(
+        http.clone(),
+        Arc::new(AtomicBool::new(cfg.notification_sound_only)),
+    );
     let mut notifier = DiscordRPCNotifier::new(cfg, sender, http)
         .with_receive_control(control, Arc::new(AtomicU8::new(0)))
         .with_trace(log.trace(Source::Simulation));
     notifier.inject_test_notification(raw, &channel).await;
     while let Ok(note) = rx.try_recv() {
-        note.validate_without_sending(privacy);
+        note.validate_without_sending();
     }
     Ok(())
 }
@@ -534,8 +571,7 @@ pub async fn run_debug_receive_test(
     presence: TestPresence,
 ) -> Result<Snapshot, String> {
     let log = debug_log(&state)?;
-    let mut cfg = state.controller.lock().await.config.clone();
-    cfg.privacy_mode = state.privacy.load(Ordering::SeqCst);
+    let cfg = state.controller.lock().await.config.clone();
     simulate_receive(cfg, log, raw, registered, presence).await?;
     Ok(log.snapshot())
 }
@@ -555,10 +591,7 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String
         return Err("更新を適用しています。再起動後に設定を開いてください。".into());
     }
     let controller = state.controller.lock().await;
-    Ok(public_settings(
-        &controller.config,
-        state.privacy.load(Ordering::SeqCst),
-    ))
+    Ok(public_settings(&controller.config))
 }
 #[tauri::command]
 pub async fn save_settings(
@@ -589,7 +622,7 @@ pub async fn save_settings(
     cfg.max_title_length = input.max_title_length;
     cfg.max_content_length = input.max_content_length;
     cfg.notification_sound = input.notification_sound;
-    cfg.privacy_mode = input.privacy_mode;
+    cfg.notification_sound_only = input.sound_only;
     cfg.auto_exit_with_vr = input.auto_exit_with_vr;
     cfg.whitelist_channel_ids = input.whitelist_channel_ids;
     cfg.receive_mode = input.receive_mode;
@@ -609,20 +642,21 @@ pub async fn save_settings(
             .into();
     }
     cfg.validate().map_err(FormError::validation)?;
-    if !cfg.notification_sound.is_empty()
-        && cfg.notification_sound != "default"
-        && (!PathBuf::from(&cfg.notification_sound).is_absolute()
-            || !PathBuf::from(&cfg.notification_sound).is_file())
-    {
-        return Err(FormError {
-            field: Some("notificationSound"),
-            message: "通知音に使うファイルを「参照」から選んでください。".into(),
-        });
+    validate_notification_sound(&cfg.notification_sound)?;
+    if !state.preview {
+        prepare_notification_sound(&state.path, cfg.notification_sound.clone())
+            .await
+            .map_err(|message| FormError {
+                field: Some("notificationSound"),
+                message,
+            })?;
     }
     if !state.preview {
         config::save_setup_at(&state.path, &cfg).map_err(|_| FormError::storage())?;
     }
-    state.privacy.store(cfg.privacy_mode, Ordering::SeqCst);
+    state
+        .sound_only
+        .store(cfg.notification_sound_only, Ordering::SeqCst);
     state.sync_tray(&app);
     controller.config = cfg;
     apply_theme(&app, controller.config.theme);
@@ -630,10 +664,7 @@ pub async fn save_settings(
     controller.problem = None;
     controller.paused = false;
     state.start_locked(&app, &mut controller).await;
-    Ok(public_settings(
-        &controller.config,
-        state.privacy.load(Ordering::SeqCst),
-    ))
+    Ok(public_settings(&controller.config))
 }
 #[tauri::command]
 pub async fn complete_onboarding(state: State<'_, AppState>) -> Result<(), String> {
@@ -660,7 +691,7 @@ pub async fn preview_reset_onboarding(state: State<'_, AppState>) -> Result<(), 
     controller.config = Config::default();
     controller.paused = false;
     controller.problem = None;
-    state.privacy.store(false, Ordering::SeqCst);
+    state.sound_only.store(false, Ordering::SeqCst);
     state.receive_control.configure(&controller.config);
     Ok(())
 }
@@ -727,13 +758,68 @@ pub async fn preview_set_presence(
     Ok(())
 }
 #[tauri::command]
-pub async fn set_privacy(
+pub async fn set_sound_only(
     app: AppHandle,
     state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<(), String> {
-    state.privacy(&app, enabled).await
+    state.notification_mode(&app, enabled).await
 }
+
+fn validate_notification_sound(sound: &str) -> Result<(), FormError> {
+    audio::validate_sound_path(sound).map_err(|message| FormError {
+        field: Some("notificationSound"),
+        message: message.into(),
+    })?;
+    if !matches!(sound, "" | "default" | "error" | "warning") && std::fs::File::open(sound).is_err()
+    {
+        return Err(FormError {
+            field: Some("notificationSound"),
+            message: "通知音のファイルを読み込めません。「参照」から選び直してください。".into(),
+        });
+    }
+    Ok(())
+}
+
+async fn prepare_notification_sound(
+    config_path: &std::path::Path,
+    sound: String,
+) -> Result<String, String> {
+    let directory = config_path
+        .parent()
+        .ok_or("通知音の保存先を確認してください。")?
+        .join("sound-cache");
+    tokio::task::spawn_blocking(move || audio::prepare_sound(&sound, &directory))
+        .await
+        .map_err(|_| "通知音の変換処理を完了できませんでした。".to_string())?
+        .map_err(String::from)
+}
+
+async fn queue_test_notification(sender: &XsOverlaySender, cfg: &Config) -> Result<(), String> {
+    validate_notification_sound(&cfg.notification_sound).map_err(|error| error.message)?;
+    if !cfg.notification_sound.is_empty() && cfg.notification_volume <= 0.0 {
+        return Err(
+            "通知音の音量が 0% です。「設定 → 通知音・動作」で音量を上げて保存してください。"
+                .into(),
+        );
+    }
+    if sender
+        .send_notification(
+            "DiToVR",
+            "これはテスト通知です",
+            None,
+            &cfg.notification_sound,
+            cfg.notification_volume,
+            cfg.notification_timeout,
+        )
+        .await
+    {
+        Ok(())
+    } else {
+        Err("送信できませんでした。XSOverlay の接続を確認してください。".into())
+    }
+}
+
 #[tauri::command]
 pub async fn send_test(state: State<'_, AppState>) -> Result<(), String> {
     if state.diagnostics.is_some() {
@@ -745,13 +831,14 @@ pub async fn send_test(state: State<'_, AppState>) -> Result<(), String> {
     if state.preview {
         return Err("プレビューでは通知を送信しません。".into());
     }
-    let sender = {
+    let (sender, mut cfg) = {
         let controller = state.controller.lock().await;
-        controller
+        let sender = controller
             .services
             .as_ref()
             .filter(|s| s.overlay.load(Ordering::SeqCst))
-            .map(|s| s.sender.clone())
+            .map(|s| s.sender.clone());
+        (sender, controller.config.clone())
     };
     let Some(sender) = sender else {
         return Err("XSOverlay に接続してから試してください。".into());
@@ -761,14 +848,9 @@ pub async fn send_test(state: State<'_, AppState>) -> Result<(), String> {
     } else {
         sender
     };
-    if sender
-        .send_notification("DiToVR", "これはテスト通知です", None, "", 0.0, 5.0)
-        .await
-    {
-        Ok(())
-    } else {
-        Err("送信できませんでした。XSOverlay の接続を確認してください。".into())
-    }
+    cfg.notification_sound =
+        prepare_notification_sound(&state.path, cfg.notification_sound.clone()).await?;
+    queue_test_notification(&sender, &cfg).await
 }
 #[tauri::command]
 pub fn open_portal(window: tauri::WebviewWindow) -> Result<(), String> {
@@ -896,23 +978,23 @@ pub fn install_tray(app: &AppHandle, state: &AppState) {
             "normal",
             "通常表示",
             true,
-            !state.privacy.load(Ordering::SeqCst),
+            !state.sound_only.load(Ordering::SeqCst),
             None::<&str>,
         )?;
-        let private = CheckMenuItem::with_id(
+        let audio = CheckMenuItem::with_id(
             app,
-            "privacy",
-            "配信用表示",
+            "sound-only",
+            "通知音のみ",
             true,
-            state.privacy.load(Ordering::SeqCst),
+            state.sound_only.load(Ordering::SeqCst),
             None::<&str>,
         )?;
         let test = MenuItem::with_id(app, "test", "テスト通知", true, None::<&str>)?;
         let settings = MenuItem::with_id(app, "settings", "設定", true, None::<&str>)?;
         let exit = MenuItem::with_id(app, "exit", "終了", true, None::<&str>)?;
-        let menu = Menu::with_items(app, &[&open, &normal, &private, &test, &settings, &exit])?;
+        let menu = Menu::with_items(app, &[&open, &normal, &audio, &test, &settings, &exit])?;
         if let Ok(mut modes) = state.tray_modes.lock() {
-            *modes = Some((normal, private));
+            *modes = Some((normal, audio));
         }
         let mut builder = TrayIconBuilder::with_id("main-tray")
             .menu(&menu)
@@ -933,12 +1015,13 @@ pub fn install_tray(app: &AppHandle, state: &AppState) {
             .on_menu_event(|app, event| match event.id.as_ref() {
                 "exit" => app.exit(0),
                 "open" => restore(app),
-                "normal" | "privacy" => {
-                    let enabled = event.id.as_ref() == "privacy";
+                "normal" | "sound-only" => {
+                    let enabled = event.id.as_ref() == "sound-only";
                     let app = app.clone();
                     tauri::async_runtime::spawn(async move {
                         let state = app.state::<AppState>();
-                        if let Err(error) = state.privacy(&app, enabled).await {
+                        if let Err(error) = state.notification_mode(&app, enabled).await {
+                            state.sync_tray(&app);
                             let _ = app.emit("operation-error", error);
                         }
                     });
@@ -957,7 +1040,9 @@ pub fn install_tray(app: &AppHandle, state: &AppState) {
                         let result = send_test(app.state::<AppState>()).await;
                         let _ = app.emit(
                             "operation-result",
-                            result.map(|_| "送信待ちに追加しました。VR 内で確認してください。"),
+                            result.map(|_| {
+                                "送信待ちに追加しました。通知の表示または音を確認してください。"
+                            }),
                         );
                     });
                 }
@@ -974,6 +1059,49 @@ pub fn install_tray(app: &AppHandle, state: &AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn test_notifications_reject_missing_files_and_zero_volume_before_queueing() {
+        let (sender, mut rx) =
+            vr::create_diagnostic_channel(reqwest::Client::new(), Arc::new(AtomicBool::new(false)));
+        let mut cfg = Config {
+            notification_sound: "default".into(),
+            ..Config::default()
+        };
+        assert!(queue_test_notification(&sender, &cfg)
+            .await
+            .unwrap_err()
+            .contains("0%"));
+        assert!(rx.try_recv().is_err());
+        cfg.notification_volume = 0.6;
+        cfg.notification_sound = std::env::temp_dir()
+            .join(format!(
+                "ditovr-missing-sound-{}-{}.ogg",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos(),
+            ))
+            .to_string_lossy()
+            .into();
+        assert!(queue_test_notification(&sender, &cfg)
+            .await
+            .unwrap_err()
+            .contains("読み込めません"));
+        assert!(rx.try_recv().is_err());
+        for path in [r"C:\sound.txt", r"C:\sound.exe"] {
+            let error = validate_notification_sound(path).unwrap_err();
+            assert_eq!(error.field, Some("notificationSound"));
+            assert!(error.message.contains("Ogg Vorbis"));
+        }
+        cfg.notification_sound = "default".into();
+        queue_test_notification(&sender, &cfg).await.unwrap();
+        assert!(rx.try_recv().is_ok());
+        cfg.notification_sound.clear();
+        cfg.notification_volume = 0.0;
+        queue_test_notification(&sender, &cfg).await.unwrap();
+        assert!(rx.try_recv().is_ok());
+    }
     #[tokio::test]
     async fn debug_is_opt_in_and_local_simulations_remain_separate_from_live_receives() {
         let state = AppState::new(PathBuf::new(), true, false, None, None, false);
@@ -1036,7 +1164,7 @@ mod tests {
             bot_token: "never-expose-bot".into(),
             ..Config::default()
         };
-        let text = serde_json::to_string(&public_settings(&cfg, false)).unwrap();
+        let text = serde_json::to_string(&public_settings(&cfg)).unwrap();
         assert!(!text.contains("never-expose"));
         assert!(!text.contains("clientSecret"));
         assert!(!text.contains("accessToken"));

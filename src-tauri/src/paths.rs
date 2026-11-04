@@ -59,7 +59,11 @@ mod tests {
         let migrated = config::load_from_path(&destination, false).unwrap();
         assert_eq!(migrated.client_id, "123456789");
         assert_eq!(migrated.access_token, "synthetic-access");
-        assert!(migrated.privacy_mode);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&std::fs::read(&destination).unwrap())
+                .unwrap()["PRIVACY_MODE"],
+            true
+        );
         assert_eq!(fs::read(&previous).unwrap(), original);
         let saved = fs::read(&destination).unwrap();
         let raw: serde_json::Value = serde_json::from_slice(&saved).unwrap();

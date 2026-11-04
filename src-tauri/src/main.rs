@@ -12,14 +12,14 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help") {
         system::attach_console();
-        println!("DiToVR (Tauri)\n--setup: 設定を開く\n--privacy / --normal: 表示モードを指定\n-debug / --debug: XSOverlay を使わない Discord 受信診断とダミーテスト\n--ui-preview: 接続しない画面プレビュー\n×でトレイへ収納。停止は「終了」。");
+        println!("DiToVR (Tauri)\n--setup: 設定を開く\n--sound-only / --normal: 通知音のみ / 通常表示を指定（通知音は設定で保存）\n-debug / --debug: XSOverlay を使わない Discord 受信診断とダミーテスト\n--ui-preview: 接続しない画面プレビュー\n×でトレイへ収納。停止は「終了」。");
         return;
     }
     let preview = args.iter().any(|a| a == "--ui-preview");
     let debug_enabled = args
         .iter()
         .any(|a| matches!(a.as_str(), "-debug" | "--debug"));
-    let launch_mode = if args.iter().any(|a| a == "--privacy") {
+    let launch_mode = if args.iter().any(|a| a == "--sound-only") {
         Some(true)
     } else if args.iter().any(|a| a == "--normal") {
         Some(false)
@@ -65,7 +65,7 @@ fn main() {
             app::complete_onboarding,
             app::preview_reset_onboarding,
             app::cancel_settings,
-            app::set_privacy,
+            app::set_sound_only,
             app::set_receive_mode,
             app::preview_set_presence,
             app::send_test,

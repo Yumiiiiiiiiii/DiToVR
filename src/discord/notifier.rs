@@ -573,8 +573,8 @@ impl DiscordRPCNotifier {
             }
         }
 
-        if self.xs_sender.privacy_mode() {
-            println!("📩 [受信] Discord 通知（配信用モード）");
+        if self.xs_sender.sound_only_mode() {
+            println!("📩 [受信] Discord 通知");
             sender
                 .send_notification(
                     "Discord",
@@ -624,7 +624,7 @@ impl DiscordRPCNotifier {
             content = format!("{context}\n{content}");
         }
 
-        if self.config.log_message_content && !self.xs_sender.privacy_mode() {
+        if self.config.log_message_content && !self.xs_sender.sound_only_mode() {
             println!("📩 [受信] {}: {}", title, content);
         } else {
             println!("📩 [受信] Discord 通知");
@@ -874,9 +874,9 @@ mod tests {
         };
         let control = ReceiveControl::new(&cfg);
         let log = Diagnostics::default();
-        let privacy = Arc::new(AtomicBool::new(false));
-        let (sender, rx) = crate::vr::create_diagnostic_channel(Client::new(), privacy.clone());
-        let worker = tokio::spawn(crate::vr::receive_diagnostic_loop(rx, privacy));
+        let sound_only = Arc::new(AtomicBool::new(false));
+        let (sender, rx) = crate::vr::create_diagnostic_channel(Client::new(), sound_only.clone());
+        let worker = tokio::spawn(crate::vr::receive_diagnostic_loop(rx));
         let mut notifier = DiscordRPCNotifier::new(cfg.clone(), sender, Client::new())
             .with_receive_control(control.clone(), Arc::new(AtomicU8::new(0)))
             .with_trace(log.trace(Source::Live));
@@ -1056,9 +1056,9 @@ mod tests {
             // Any uncached/duplicate request would break the checks below.
             sleep(Duration::from_millis(100)).await;
         });
-        let privacy = Arc::new(AtomicBool::new(false));
+        let sound_only = Arc::new(AtomicBool::new(false));
         let (sender, mut rx, connected) =
-            crate::vr::create_xsoverlay_channel(Client::new(), privacy.clone());
+            crate::vr::create_xsoverlay_channel(Client::new(), sound_only.clone());
         connected.store(true, Ordering::SeqCst);
         let mut notifier = DiscordRPCNotifier::new(
             Config {
@@ -1093,7 +1093,7 @@ mod tests {
             .set_mode(super::super::receive::ReceiveMode::Normal);
         notifier.handle_notification(serde_json::json!({"channel_id":"300","channel":{"type":3,"name":"Friends"},"message":{"id":"dm","author":{"username":"Alice"},"content":"group dm"}}), EVT_NOTIFICATION_CREATE).await;
         assert_eq!(rx.recv().await.unwrap().content, "group dm");
-        privacy.store(true, Ordering::SeqCst);
+        sound_only.store(true, Ordering::SeqCst);
         notifier.handle_notification(serde_json::json!({"channel_id":"400","guild_id":"500","message":{"id":"private","content":"private message"}}), EVT_NOTIFICATION_CREATE).await;
         assert_eq!(
             rx.recv().await.unwrap().content,
@@ -1150,10 +1150,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn privacy_toggle_hides_identity_and_duplicate_notifications() {
-        let privacy = Arc::new(AtomicBool::new(false));
+    async fn sound_only_toggle_hides_identity_and_duplicate_notifications() {
+        let sound_only = Arc::new(AtomicBool::new(false));
         let (sender, mut rx, connected) =
-            crate::vr::create_xsoverlay_channel(Client::new(), privacy.clone());
+            crate::vr::create_xsoverlay_channel(Client::new(), sound_only.clone());
         connected.store(true, Ordering::SeqCst);
         let mut notifier = DiscordRPCNotifier::new(Config::default(), sender, Client::new());
         let data = serde_json::json!({
@@ -1170,7 +1170,7 @@ mod tests {
             .handle_notification(data, EVT_NOTIFICATION_CREATE)
             .await;
         assert!(rx.try_recv().is_err());
-        privacy.store(true, Ordering::SeqCst);
+        sound_only.store(true, Ordering::SeqCst);
         notifier.handle_notification(serde_json::json!({
             "message": {"id": "3", "author": {"id": "2", "username": "Alice"}, "content": "secret"}
         }), EVT_NOTIFICATION_CREATE).await;

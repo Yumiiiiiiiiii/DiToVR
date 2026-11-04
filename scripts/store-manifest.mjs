@@ -50,5 +50,6 @@ if (process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)
   const loader=join(dirname(exe),"WebView2Loader.dll");
   if (existsSync(loader)) copyFileSync(loader,join(stage,"WebView2Loader.dll"));
   copyFileSync(join(root,"LICENSE"),join(stage,"LICENSE.txt"));
+  copyFileSync(join(root,"THIRD_PARTY_AUDIO_NOTICES.txt"),join(stage,"THIRD_PARTY_AUDIO_NOTICES.txt"));
   for (const file of ["StoreLogo.png","Square150x150Logo.png","Square44x44Logo.png"]) copyFileSync(join(icons,file),join(stage,"Assets",file));
 }

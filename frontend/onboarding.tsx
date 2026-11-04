@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Bell, Check, CheckCheck, ExternalLink, Gamepad2, Info, LockKeyhole, MessageCircle, Monitor, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bell, Check, ExternalLink, Gamepad2, Info, LockKeyhole, MessageCircle, Monitor, ShieldCheck, Sparkles, Volume2 } from "lucide-react";
 import { api, errorMessage, type Settings, type SettingsInput, type Status } from "./bridge";
 import "./onboarding.css";
+import { NotificationModeChoices } from "./notification-mode";
 
-const steps = ["ようこそ", "準備", "Discord接続", "表示を選ぶ", "接続確認"];
+const steps = ["ようこそ", "準備", "Discord接続", "通知を選ぶ", "接続確認"];
 type Props = {
   initial: Settings;
   status: Status;
@@ -93,7 +94,7 @@ export function Onboarding({ initial, status, busy, resumeConnection, onSave, on
       </ol>
       <section className="tutorial-card" aria-labelledby="tutorial-heading">
         <div className="tutorial-step-label">STEP {step + 1} / {steps.length}</div>
-        <h2 id="tutorial-heading" ref={heading} tabIndex={-1}>{["いつもの Discord を、VR の中へ。", "使うアプリを準備しましょう", "自分の Discord アプリを作りましょう", "通知の見え方を選びましょう", "保存できました。接続を確認しましょう"][step]}</h2>
+        <h2 id="tutorial-heading" ref={heading} tabIndex={-1}>{["いつもの Discord を、VR の中へ。", "使うアプリを準備しましょう", "自分の Discord アプリを作りましょう", "通知の受け取り方を選びましょう", "保存できました。接続を確認しましょう"][step]}</h2>
         {step === 0 && <>
           <p className="tutorial-lead">{status.debugEnabled ? "今回は Discord の受信テスト専用です。XSOverlay・SteamVR は起動せず、Discord の接続設定を進めます。" : "Discord のメッセージ通知を XSOverlay に届けます。まずは通常の通知を受け取れるように設定します。"}</p>
           <div className="tutorial-flow" aria-label="Discord の通知をこのアプリから XSOverlay へ転送">
@@ -130,13 +131,12 @@ export function Onboarding({ initial, status, busy, resumeConnection, onSave, on
         </>}
         {step === 3 && <>
           <p className="tutorial-lead">ホームでいつでも切り替えられます。ほかの表示・通知音の設定も、あとで変更できます。</p>
-          <div className="tutorial-display-options">
-            {[false, true].map(privacy => <button type="button" key={String(privacy)} disabled={locked} aria-pressed={values.privacyMode === privacy} className={`tutorial-display-option ${values.privacyMode === privacy ? "selected" : ""}`} onClick={() => setValues({ ...values, privacyMode: privacy })}>
-              {privacy ? <ShieldCheck size={23} /> : <MessageCircle size={23} />}<strong>{privacy ? "配信用表示" : "通常表示"}</strong><p>{privacy ? "名前・本文・アイコンを隠す" : "誰からのメッセージか確認できる"}</p><span>{values.privacyMode === privacy ? <CheckCheck size={17} /> : null}{values.privacyMode === privacy ? "選択中" : "この表示を選ぶ"}</span>
-            </button>)}
-          </div>
-          <div className="tutorial-sample"><span>VR での表示例（ダミー）</span><strong>{values.privacyMode ? "Discord" : "サンプルさん"}</strong><p>{values.privacyMode ? "新しいメッセージがあります" : "こんにちは！ VR の中でも届きます。"}</p></div>
-          <div className="tutorial-callout"><Info size={19} /><p>配信用表示へ切り替えても、すでに表示した通知は消えません。配信を始める前に選んでください。</p></div>
+          <NotificationModeChoices name="tutorial-mode" className="mode-options-inline" value={values.soundOnly} disabled={locked} onChange={soundOnly => setValues({ ...values, soundOnly, notificationSound: soundOnly && !values.notificationSound ? "default" : values.notificationSound, volumePercent: soundOnly && values.volumePercent <= 0 ? 30 : values.volumePercent })} />
+          {values.soundOnly ? <>
+            <div className="tutorial-callout"><Volume2 size={19} /><p>{values.notificationSound === "default" ? "標準の通知音を使います。" : "設定済みの通知音を使います。"}VR に通知は表示されません。XSOverlay への接続は必要です。</p></div>
+            <label htmlFor="tutorial-volume">通知音の音量: {values.volumePercent}%</label>
+            <input id="tutorial-volume" type="range" min="1" max="100" value={values.volumePercent} disabled={locked} aria-valuetext={`${values.volumePercent}%`} onChange={event => setValues({ ...values, volumePercent: Number(event.target.value) })} />
+          </> : <div className="tutorial-sample"><span>VR での表示例（ダミー）</span><strong>サンプルさん</strong><p>こんにちは！ VR の中でも届きます。</p></div>}
           <p className="tutorial-muted">次へ進むと接続設定を保存します。Discord の承認画面が開いたら、自分のアプリであることを確認して承認してください。</p>
         </>}
         {step === 4 && <>
@@ -145,7 +145,7 @@ export function Onboarding({ initial, status, busy, resumeConnection, onSave, on
             <article><MessageCircle size={23} /><div><strong>Discord</strong><p>{status.discord === 2 ? "通知を受信する準備ができました。" : status.discord === 4 ? "Client ID・Secret・Redirect URI と承認状態を確認してください。「戻る」から修正できます。" : status.discord === 1 ? "Discord に表示された承認画面を確認してください。" : "Discord デスクトップアプリを起動して待ってください。"}</p></div><span className={`status-label ${status.discord === 2 ? "good" : ""}`}>{status.discord === 2 ? "接続済み" : status.discord === 4 ? "確認が必要" : "接続待ち"}</span></article>
             <article><Gamepad2 size={23} /><div><strong>XSOverlay</strong><p>{status.debugEnabled ? "受信テストでは接続・VR 送信を行いません。" : status.overlay ? "VR に通知を送る準備ができました。" : "SteamVR と XSOverlay を起動し、通知用 WebSocket を有効にしてください。"}</p></div><span className={`status-label ${status.overlay ? "good" : ""}`}>{status.debugEnabled ? "使用しません" : status.overlay ? "接続済み" : "接続待ち"}</span></article>
           </div>
-          {!status.debugEnabled && <button type="button" className="secondary" disabled={locked || !status.overlay || status.paused || status.preview} onClick={() => void run(async () => { await api("send_test"); setNotice("テスト通知を送信待ちに追加しました。VR 内に表示されることを確認してください。"); })}><Bell size={16} />テスト通知を送る</button>}
+          {!status.debugEnabled && <button type="button" className="secondary" disabled={locked || !status.overlay || status.paused || status.preview} onClick={() => void run(async () => { await api("send_test"); setNotice(status.soundOnly ? "テスト通知を送信待ちに追加しました。通知音を確認してください。" : "テスト通知を送信待ちに追加しました。VR 内の表示と通知音を確認してください。"); })}><Bell size={16} />テスト通知を送る</button>}
           {notice && <p className="tutorial-notice" role="status">{notice}</p>}
           <div className="tutorial-callout"><Info size={20} /><div><strong>取り込み中にも受け取りたい場合</strong><p>許可リストにチャンネル・DM を登録します。手動で切り替えるほか、Bot で取り込み中を自動判別できます。</p><button type="button" className="tutorial-text-button" disabled={locked} onClick={() => void run(() => onFinish(true))}>許可リスト・Bot の設定へ進む<ArrowRight size={15} /></button></div></div>
           <p className="tutorial-muted">×・Esc はトレイへ収納します。転送を止める場合は「アプリを終了」を選びます。接続確認はホームからも行えます。</p>

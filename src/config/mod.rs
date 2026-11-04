@@ -36,6 +36,10 @@ fn write_lock() -> io::Result<MutexGuard<'static, ()>> {
         .map_err(|_| io::Error::other("設定保存の状態を確認できません。再起動してください。"))
 }
 
+pub(crate) fn write_generated_file(path: &Path, content: &[u8]) -> io::Result<()> {
+    storage::atomic_write(path, content)
+}
+
 const DEFAULT_CLIENT_ID: &str = "YOUR_CLIENT_ID_HERE";
 const DEFAULT_CLIENT_SECRET: &str = "YOUR_CLIENT_SECRET_HERE";
 
@@ -62,6 +66,8 @@ pub struct Config {
     pub redirect_uri: String,
     #[serde(rename = "NOTIFICATION_SOUND")]
     pub notification_sound: String,
+    #[serde(rename = "NOTIFICATION_SOUND_ONLY")]
+    pub notification_sound_only: bool,
     #[serde(rename = "NOTIFICATION_VOLUME")]
     pub notification_volume: f64,
     #[serde(rename = "NOTIFICATION_TIMEOUT")]
@@ -70,8 +76,6 @@ pub struct Config {
     pub max_title_length: usize,
     #[serde(rename = "MAX_CONTENT_LENGTH")]
     pub max_content_length: usize,
-    #[serde(rename = "PRIVACY_MODE")]
-    pub privacy_mode: bool,
     #[serde(rename = "LOG_MESSAGE_CONTENT")]
     pub log_message_content: bool,
     #[serde(rename = "AUTO_EXIT_WITH_VR")]
@@ -105,11 +109,11 @@ impl Default for Config {
             client_secret: DEFAULT_CLIENT_SECRET.to_string(),
             redirect_uri: "http://localhost/".to_string(),
             notification_sound: String::new(),
+            notification_sound_only: false,
             notification_volume: 0.0,
             notification_timeout: 5.0,
             max_title_length: 35,
             max_content_length: 70,
-            privacy_mode: false,
             log_message_content: false,
             auto_exit_with_vr: true,
             whitelist_channel_ids: Vec::new(),
@@ -158,6 +162,11 @@ impl Config {
         if !self.notification_volume.is_finite() || !(0.0..=1.0).contains(&self.notification_volume)
         {
             return Err("NOTIFICATION_VOLUME は 0.0 ～ 1.0 にしてください。");
+        }
+        if self.notification_sound_only
+            && (self.notification_sound.is_empty() || self.notification_volume <= 0.0)
+        {
+            return Err("NOTIFICATION_SOUND_ONLY 通知音のみを使うには、通知音を選び音量を1%以上にしてください。");
         }
         if !self.notification_timeout.is_finite()
             || !(1.0..=30.0).contains(&self.notification_timeout)
@@ -306,11 +315,11 @@ pub fn save_setup_at(path: &Path, config: &Config) -> io::Result<()> {
     raw["CLIENT_ID"] = Value::String(config.client_id.clone());
     raw["CLIENT_SECRET"] = Value::String(config.client_secret.clone());
     raw["REDIRECT_URI"] = Value::String(config.redirect_uri.clone());
-    raw["PRIVACY_MODE"] = Value::Bool(config.privacy_mode);
     raw["THEME"] = serde_json::to_value(config.theme)?;
     raw["NOTIFICATION_TIMEOUT"] = Value::from(config.notification_timeout);
     raw["NOTIFICATION_VOLUME"] = Value::from(config.notification_volume);
     raw["NOTIFICATION_SOUND"] = Value::String(config.notification_sound.clone());
+    raw["NOTIFICATION_SOUND_ONLY"] = Value::Bool(config.notification_sound_only);
     raw["MAX_TITLE_LENGTH"] = Value::from(config.max_title_length);
     raw["MAX_CONTENT_LENGTH"] = Value::from(config.max_content_length);
     raw["AUTO_EXIT_WITH_VR"] = Value::Bool(config.auto_exit_with_vr);
@@ -377,11 +386,12 @@ pub fn complete_onboarding_at(path: &Path) -> io::Result<()> {
     storage::atomic_write(path, &serde_json::to_vec_pretty(&raw)?)
 }
 
-pub fn save_privacy_at(path: &Path, enabled: bool) -> io::Result<()> {
+pub fn save_sound_only_at(path: &Path, enabled: bool) -> io::Result<()> {
     let _guard = write_lock()?;
     let mut raw = read_document(path)?;
     decode_config(&raw)?;
-    raw["PRIVACY_MODE"] = Value::Bool(enabled);
+    raw["NOTIFICATION_SOUND_ONLY"] = Value::Bool(enabled);
+    decode_config(&raw)?;
     storage::protect_secrets(&mut raw)?;
     storage::atomic_write(path, &serde_json::to_vec_pretty(&raw)?)
 }
@@ -437,10 +447,10 @@ mod tests {
         let cfg = Config {
             access_token: "migration-access".into(),
             refresh_token: "migration-refresh".into(),
-            privacy_mode: true,
             ..valid_config()
         };
         let mut raw = serde_json::to_value(&cfg).unwrap();
+        raw["PRIVACY_MODE"] = Value::Bool(true);
         raw["CUSTOM_EXTENSION"] = serde_json::json!({"enabled": true});
         let original = serde_json::to_vec(&raw).unwrap();
         fs::write(&previous, &original).unwrap();
@@ -450,7 +460,7 @@ mod tests {
         assert_eq!(migrated.client_secret, cfg.client_secret);
         assert_eq!(migrated.access_token, cfg.access_token);
         assert_eq!(migrated.refresh_token, cfg.refresh_token);
-        assert!(migrated.privacy_mode);
+        assert_eq!(read_document(&destination).unwrap()["PRIVACY_MODE"], true);
         let document = read_document(&destination).unwrap();
         assert_eq!(document["CUSTOM_EXTENSION"], raw["CUSTOM_EXTENSION"]);
         assert!(!storage::needs_protection(&document));
@@ -468,7 +478,12 @@ mod tests {
     fn mode_changes_survive_token_refresh_and_reject_broken_settings() {
         let path =
             std::env::temp_dir().join(format!("discord-vr-mode-{}.json", uuid::Uuid::new_v4()));
-        save_setup_at(&path, &valid_config()).unwrap();
+        let cfg = Config {
+            notification_sound: "default".into(),
+            notification_volume: 0.6,
+            ..valid_config()
+        };
+        save_setup_at(&path, &cfg).unwrap();
         let mut raw = read_document(&path).unwrap();
         raw["EXTRA_SETTING"] = Value::from("keep");
         fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
@@ -479,18 +494,18 @@ mod tests {
             }
         });
         for _ in 0..20 {
-            save_privacy_at(&path, false).unwrap();
-            save_privacy_at(&path, true).unwrap();
+            save_sound_only_at(&path, false).unwrap();
+            save_sound_only_at(&path, true).unwrap();
         }
         tokens.join().unwrap();
         let saved = load_from_path(&path, false).unwrap();
-        assert!(saved.privacy_mode);
+        assert!(saved.notification_sound_only);
         assert_eq!(saved.access_token, "new-access");
         assert_eq!(saved.refresh_token, "new-refresh");
         assert_eq!(read_document(&path).unwrap()["EXTRA_SETTING"], "keep");
         assert!(!storage::needs_protection(&read_document(&path).unwrap()));
         fs::write(&path, b"{broken").unwrap();
-        assert!(save_privacy_at(&path, false).is_err());
+        assert!(save_sound_only_at(&path, false).is_err());
         assert_eq!(fs::read(&path).unwrap(), b"{broken");
         fs::remove_file(path).unwrap();
     }
@@ -544,7 +559,7 @@ mod tests {
         ));
         save_setup_at(&path, &cfg).unwrap();
         save_tokens_at(&path, "dummy-access", "dummy-refresh").unwrap();
-        save_privacy_at(&path, true).unwrap();
+        save_sound_only_at(&path, false).unwrap();
         assert_eq!(
             load_from_path(&path, false).unwrap().whitelist_channel_ids,
             cfg.whitelist_channel_ids
@@ -585,10 +600,56 @@ mod tests {
             "REDIRECT_URI": "http://localhost/"
         }))
         .unwrap();
-        assert!(!config.privacy_mode);
+        assert!(!config.notification_sound_only);
         assert!(!config.log_message_content);
         assert_eq!(config.notification_volume, 0.0);
         assert_eq!(config.theme, ThemePreference::System);
+    }
+
+    #[test]
+    fn sound_only_persists_without_losing_tokens_or_extensions_and_rejects_mute() {
+        let path =
+            std::env::temp_dir().join(format!("ditovr-sound-mode-{}.json", uuid::Uuid::new_v4()));
+        let mut cfg = valid_config();
+        save_setup_at(&path, &cfg).unwrap();
+        let unchanged = fs::read(&path).unwrap();
+        assert!(save_sound_only_at(&path, true).is_err());
+        assert_eq!(fs::read(&path).unwrap(), unchanged);
+        cfg.notification_sound = "default".into();
+        cfg.notification_volume = 0.6;
+        save_setup_at(&path, &cfg).unwrap();
+        save_tokens_at(&path, "dummy-access", "dummy-refresh").unwrap();
+        let mut raw = read_document(&path).unwrap();
+        raw["EXTRA_SETTING"] = serde_json::json!({"keep": true});
+        fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+        save_sound_only_at(&path, true).unwrap();
+        save_tokens_at(&path, "new-access", "new-refresh").unwrap();
+        let saved = load_from_path(&path, false).unwrap();
+        assert!(saved.notification_sound_only);
+        assert_eq!(saved.notification_sound, "default");
+        assert_eq!(saved.notification_volume, 0.6);
+        assert_eq!(saved.access_token, "new-access");
+        assert_eq!(saved.refresh_token, "new-refresh");
+        assert_eq!(saved.client_secret, cfg.client_secret);
+        let raw = read_document(&path).unwrap();
+        assert_eq!(raw["EXTRA_SETTING"], serde_json::json!({"keep": true}));
+        assert!(!storage::needs_protection(&raw));
+        save_sound_only_at(&path, false).unwrap();
+        assert!(
+            !load_from_path(&path, false)
+                .unwrap()
+                .notification_sound_only
+        );
+        for sound in ["", "default"] {
+            cfg.notification_sound = sound.into();
+            cfg.notification_volume = 0.0;
+            cfg.notification_sound_only = true;
+            assert!(cfg
+                .validate()
+                .unwrap_err()
+                .starts_with("NOTIFICATION_SOUND_ONLY"));
+        }
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
@@ -604,7 +665,7 @@ mod tests {
             config.theme = theme;
             save_setup_at(&path, &config).unwrap();
             save_tokens_at(&path, "dummy-access", "dummy-refresh").unwrap();
-            save_privacy_at(&path, true).unwrap();
+            save_sound_only_at(&path, false).unwrap();
             assert_eq!(load_from_path(&path, false).unwrap().theme, theme);
         }
         fs::remove_file(path).unwrap();
@@ -658,7 +719,9 @@ mod tests {
         raw["NOTIFICATION_TIMEOUT"] = Value::from(12.0);
         fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
         let mut edited = setup_defaults(&path).unwrap();
-        edited.privacy_mode = true;
+        edited.notification_sound_only = true;
+        edited.notification_sound = "default".into();
+        edited.notification_volume = 0.6;
         save_setup_at(&path, &edited).unwrap();
         assert_eq!(
             load_from_path(&path, false).unwrap().access_token,
@@ -669,7 +732,7 @@ mod tests {
         let loaded = load_from_path(&path, false).unwrap();
         assert!(loaded.access_token.is_empty());
         assert!(loaded.refresh_token.is_empty());
-        assert!(loaded.privacy_mode);
+        assert!(loaded.notification_sound_only);
         assert_eq!(loaded.notification_timeout, 12.0);
         assert_eq!(
             read_document(&path).unwrap()["EXTRA_SETTING"],

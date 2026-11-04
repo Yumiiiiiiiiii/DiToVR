@@ -13,6 +13,72 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_
 
 static CONSOLE_REQUESTED: AtomicBool = AtomicBool::new(false);
 
+/// PlayAudio accepts a file URL, while SendNotification resolves built-in names in its UI.
+/// Locate the running XSOverlay's own sound, without reading Steam or user configuration.
+pub fn xsoverlay_sound_file(sound: &str) -> Option<std::path::PathBuf> {
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    let file = match sound {
+        "default" => "Notification_Default.ogg",
+        "error" => "Notification_Error.ogg",
+        "warning" => "Notification_Warning.ogg",
+        _ => return None,
+    };
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE || snapshot.is_null() {
+            return None;
+        }
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        let mut found = None;
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                let end = entry
+                    .szExeFile
+                    .iter()
+                    .position(|&c| c == 0)
+                    .unwrap_or(entry.szExeFile.len());
+                if String::from_utf16_lossy(&entry.szExeFile[..end])
+                    .eq_ignore_ascii_case("XSOverlay.exe")
+                {
+                    let process =
+                        OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, entry.th32ProcessID);
+                    if !process.is_null() {
+                        let mut buffer = vec![0u16; 32768];
+                        let mut size = buffer.len() as u32;
+                        if QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut size)
+                            != 0
+                        {
+                            let executable = std::path::PathBuf::from(String::from_utf16_lossy(
+                                &buffer[..size as usize],
+                            ));
+                            if let Some(directory) = executable.parent() {
+                                let root = directory.join("XSOverlay_Data/StreamingAssets");
+                                found = [
+                                    root.join("Plugins/Applications/_UI/Default/Sounds")
+                                        .join(file),
+                                    root.join("Sounds").join(file),
+                                ]
+                                .into_iter()
+                                .find(|path| path.is_file());
+                            }
+                        }
+                        CloseHandle(process);
+                    }
+                    break;
+                }
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+        found
+    }
+}
+
 pub fn attach_console() {
     CONSOLE_REQUESTED.store(true, Ordering::SeqCst);
     unsafe {

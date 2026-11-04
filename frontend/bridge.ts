@@ -20,7 +20,8 @@ export interface Status {
   theme: ThemePreference;
   discord: number;
   overlay: boolean;
-  privacy: boolean;
+  soundOnly: boolean;
+  soundReady: boolean;
   configured: boolean;
   paused: boolean;
   tray: boolean;
@@ -49,7 +50,7 @@ export interface Settings {
   maxTitleLength: number;
   maxContentLength: number;
   notificationSound: string;
-  privacyMode: boolean;
+  soundOnly: boolean;
   autoExitWithVr: boolean;
   whitelistChannelIds: string[];
   receiveMode: ReceiveMode;
@@ -96,7 +97,8 @@ const previewStatus: Status = {
   theme: "system",
   discord: 2,
   overlay: true,
-  privacy: false,
+  soundOnly: false,
+  soundReady: false,
   configured: true,
   paused: false,
   tray: true,
@@ -122,7 +124,7 @@ let previewSettings: Settings = {
   maxTitleLength: 35,
   maxContentLength: 70,
   notificationSound: "",
-  privacyMode: false,
+  soundOnly: false,
   autoExitWithVr: true,
   whitelistChannelIds: [],
   receiveMode: "normal",
@@ -178,7 +180,8 @@ export async function api<T>(
       previewStatus.onboardingPending = true;
       previewStatus.configured = false;
       previewStatus.paused = false;
-      previewSettings = { ...previewSettings, clientId: "", secretSet: false };
+      previewSettings = { ...previewSettings, clientId: "", secretSet: false, soundOnly: false };
+      previewStatus.soundOnly = false;
       return undefined as T;
     case "get_status":
       if (previewStatus.debugEnabled) previewStatus.overlay = false;
@@ -199,12 +202,16 @@ export async function api<T>(
     case "preview_set_presence":
       previewStatus.botStatus = args?.status as BotStatus;
       return undefined as T;
-    case "set_privacy":
-      previewStatus.privacy = Boolean(args?.enabled);
+    case "set_sound_only":
+      if (args?.enabled && !previewStatus.soundReady) throw "通知音のみを使うには、設定で通知音を選び音量を1%以上にしてください。";
+      previewStatus.soundOnly = Boolean(args?.enabled);
+      previewSettings.soundOnly = previewStatus.soundOnly;
       return undefined as T;
     case "get_settings":
       previewStatus.paused = true;
-      return { ...previewSettings, privacyMode: previewStatus.privacy } as T;
+      return { ...previewSettings } as T;
+    case "browse_sound":
+      return "C:\\通知音\\sample.mp3" as T;
     case "save_settings": {
       const input = args?.input as SettingsInput;
       if (
@@ -228,6 +235,10 @@ export async function api<T>(
         };
       if (!input.clientSecret?.trim() && !previewSettings.secretSet)
         throw { field: "clientSecret", message: "自分のアプリの Client Secret を入力してください。" };
+      if (input.soundOnly && (!input.notificationSound || input.volumePercent <= 0))
+        throw { field: "soundOnly", message: "通知音のみを使うには、通知音を選び音量を1%以上にしてください。" };
+      if (input.notificationSound === "file")
+        throw { field: "notificationSound", message: "「参照」から MP3・WAV・Ogg Vorbis のファイルを選んでください。" };
       for (const [field, value, min, max] of [
         ["notificationTimeout", input.notificationTimeout, 1, 30],
         ["volumePercent", input.volumePercent, 0, 100],
@@ -265,7 +276,8 @@ export async function api<T>(
         secretSet: Boolean(clientSecret) || previewSettings.secretSet,
         botTokenSet,
       };
-      previewStatus.privacy = input.privacyMode;
+      previewStatus.soundOnly = input.soundOnly;
+      previewStatus.soundReady = Boolean(input.notificationSound) && input.volumePercent > 0;
       previewStatus.theme = input.theme;
       previewStatus.paused = false;
       previewStatus.configured = true;

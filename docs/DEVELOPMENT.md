@@ -1,5 +1,7 @@
 # 開発ガイド
 
+開発を引き継ぐ場合は、[開発状況と注意事項](CODEX_HANDOFF.md) と [開発ルール](../AGENTS.md) を最初に確認してください。
+
 Microsoft Store 用 MSIX の作成・申請は [Store 配布ガイド](MICROSOFT_STORE.md) を参照してください。
 
 ソースからの起動・検証・署名付きビルド・更新配信を行う開発者と配布者向けの手順です。アプリを使う方は [README](../README.md) と [操作ガイド](UI_GUIDE.md) を参照してください。
