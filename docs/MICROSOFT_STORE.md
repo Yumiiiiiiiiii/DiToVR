@@ -154,6 +154,17 @@ Store からのインストール、起動、Discord 受信、XSOverlay 送信�
 
 変更点には `docs/release-notes/store-v0.2.21.md` を使用しています。ローカルの受付記録と検査レポートは Git 管理対象外の `target/store-only-v0.2.21/` に保存しています。処理中の申請を再作成せず、公開状態は Partner Center で確認してください。
 
+## v0.3.0 の更新申請結果
+
+2026-11-04 **22:38 JST** 確認。[Microsoft Store workflow](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/41837557341) が成功し、音声修正・MP3/WAV対応・通知音のみモード・配信用表示削除を含む `DiToVR_0.3.0.0_x64.msix` の更新申請が受け付けられました。通常版と共通の `v0.3.0` タグを使用しています。
+
+- ソース: `7d553a15bb33b32bf414d64c2ab02c744d24bd4b`。既存のidentity・Publisher・無料価格・掲載情報・画像・審査メモを引き継いでいます。
+- 申請ID: `1152921505702314667`。22:34:48 JSTの受付状態は **`PreProcessing`**。**認定・公開完了とStore経由の端末更新は未確認**です。重複する更新申請を作成しないでください。
+- 申請前の[読み取り専用確認](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/41836844831)で、以前の申請 `1152921505702308182` が0.2.21.0として公開済みであることを確認しました。上の0.2.21節にある未確認の記録を更新します。
+- 依存監査、Core50件・Store desktop5件・Node31件、MSVCビルド、MakeAppx検証、Defender検査が成功。Defender定義 `1.463.121.0` で本体・MSIXの検出なし。
+- MSIX SHA-256: `7227b0852a3b529b64abd184ba30d1df88fac41d4169b1d7df109f5962900f52`。CI成果物を取得し、検査レポートとの一致・実マニフェスト・音声ライセンス同梱も確認しました。
+- 受付記録・MSIX・検査レポートは `%TEMP%\ditovr-release-v0.3.0\`。署名されていない申請用MSIXを一般配布しないでください。Store版はMicrosoft Storeで更新し、通常版の自動更新経路は使いません。
+
 ## 公式資料
 
 - [Tauri を MSIX にする](https://learn.microsoft.com/en-us/windows/apps/dev-tools/winapp-cli/guides/tauri)

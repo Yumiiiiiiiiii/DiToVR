@@ -1,18 +1,18 @@
 # DiToVR 開発引継ぎ
 
-最終調査日: **2026-11-04（JST）**。ソースの基準は `c544cb3a8dff3e850b1e58aaf55aae63c0be8ab8`。
+最終調査日: **2026-11-04 22:38 JST**。公開ソースの基準は `v0.3.0` → `7d553a15bb33b32bf414d64c2ab02c744d24bd4b`。初回調査時の基準は `c544cb3a8dff3e850b1e58aaf55aae63c0be8ab8`。
 
-**同日22:23 JSTの更新:** ユーザーから0.3として公開する指示を受け、デスクトップ版を0.3.0に統一して公開作業を開始。音声修正・MP3/WAV対応・通知音のみ・配信用表示削除は実装済み。公開準備と外部確認は末尾を参照。XSOverlayの実音声出力は引き続き未検証。
+**同日22:38 JSTの更新:** ユーザーの公開指示に基づき **v0.3.0をGitHub・BOOTHで公開済み**。署名付き更新フィードも0.3.0へ更新済み。Storeの0.3.0.0は申請受付済み（PreProcessing）で公開完了は未確認。音声修正・MP3/WAV対応・通知音のみ・配信用表示削除を含む。CIと配布物の照合は成功。XSOverlayの実音声出力は引き続き未検証。末尾「v0.3.0公開結果」が最新の記録。
 
 この文書は開発再開用の現在地です。利用方法は [README](../README.md) と [操作ガイド](UI_GUIDE.md)、通常の開発手順は [開発ガイド](DEVELOPMENT.md) を参照してください。開発時の継続ルールは [AGENTS.md](../AGENTS.md) にあります。
 
 ## 調査の範囲と根拠
 
 - ソース、Git 履歴、既存文書、ローカルのテスト・ビルド結果を確認した。
-- GitHub API、BOOTH 公開ページ、Partner Center の製品概要・パッケージ画面を読み取り確認した。公開先・認証設定・配布物は変更していない。
+- 初回はGitHub API、BOOTH公開ページ、Partner Centerの製品概要・パッケージ画面を読み取り確認した。後続のユーザー指示に基づく公開・更新申請は末尾に記録。認証設定や秘密鍵は変更していない。
 - このセッションで提示された過去の会話と引継ぎ情報は参照できるが、過去の Codex セッション全会話を直接閲覧したわけではない。記憶上の配布状況は現在の画面・API で再確認した。
 - 実ユーザーの設定ファイルや秘密鍵の内容は調査していない。以下の「実装済み」はコード上の存在を表し、実サービスとの動作確認の完了とは区別する。
-- 初回調査（05:57～06:03）の変更は引継ぎ文書・開発ルール・案内リンクのみ。後続の通知音修正は末尾に記録。依存更新、コミット、push、Release 公開、Store 提出は行っていない。
+- 初回調査（05:57～06:03）の変更は引継ぎ文書・開発ルール・案内リンクのみ。後続の実装・検証・コミット・公開は末尾に記録する。初回時点の未実施事項と最新の完了事項を区別する。
 
 ## 現在の状態
 
@@ -20,17 +20,17 @@ DiToVR は Discord デスクトップアプリの通知を RPC/IPC で受信し�
 
 | 対象 | 2026-11-04 の確認結果 |
 | --- | --- |
-| 現行ソース | デスクトップ版 **0.2.21**。npm、Tauri、デスクトップ Cargo と各 lockfile は整合。共通ライブラリ `ditovr-core` は独立して **0.1.0** |
-| GitHub | 最新公開 Release は **v0.2.2**。添付は `DiToVR_0.2.2_x64-setup.exe` と移行用 `latest.json`。Source code は GitHub 標準の zip / tar.gz |
-| 更新フィード | `updates` ブランチの `latest.json` は **0.2.2**、`migration.json` の `bridgeVersion` も **0.2.2**。専用ブランチへの移行は実施済み |
-| Microsoft Store | 製品 **9NFDCGL30V3K**。Partner Center で **Submission 3 の公開済み**表示を確認。公開パッケージ画面は `DiToVR_0.2.21.0_x64.msix`、`v0.2.21.0, X64` |
-| BOOTH | 商品 [8621228](https://yuuumiii.booth.pm/items/8621228)。無料ダウンロードの公開ファイル名は `DiToVR_0.2.2_x64-setup.zip`。無料・支援双方に同名が表示されるが、説明文には 0.2.1 と旧名が残る。今回 ZIP のバイト列・支援版の内容は再検証していない |
+| 現行ソース | デスクトップ版 **0.3.0**。npm、Tauri、デスクトップ Cargo と各 lockfile は整合。共通ライブラリ `ditovr-core` は独立して **0.1.0** |
+| GitHub | 最新公開 [Releaseはv0.3.0](https://github.com/Yumiiiiiiiiii/DiToVR/releases/tag/v0.3.0)。添付は `DiToVR_0.3.0_x64-setup.exe` のみ。Source codeはGitHub標準のzip / tar.gz |
+| 更新フィード | `updates` の `latest.json` は **0.3.0**。`migration.json` の `bridgeVersion` は互換性維持のため **0.2.2** のまま。実インストーラーの署名とバージョン結合を検証済み |
+| Microsoft Store | 製品 **9NFDCGL30V3K**。0.2.21.0は公開済み。0.3.0.0は申請 **1152921505702314667** の受付済み（22:34:48 JSTにPreProcessing）。最新の公開完了・端末更新は未確認 |
+| BOOTH | 商品 [8621228](https://yuuumiii.booth.pm/items/8621228)。無料・応援用とも `DiToVR_0.3.0_x64-setup.zip`、ファイルID10078568。説明文も更新。無料版の公開ダウンロードを取得し、GitHubと同じインストーラーであることをSHA-256で照合済み |
 
-**Store の 0.2.21 は GitHub / BOOTH の 0.2.2 と別の配布更新。** Store 専用更新ではアプリ内更新機能を除き、Store 管理に統一した。通常版の自動更新は維持されている。
+**v0.3.0は通常版・Store版共通のリリース。** Store版のアプリ内更新削除とStore管理を維持し、通常版は署名付き自動更新を維持する。従来のStore専用0.2.21とは配布範囲が異なる。
 
-**次回の共通リリースは Store の 0.2.21 より大きい番号にする必要がある。** `0.2.3` は数値比較で `0.2.21` より小さい。候補は `0.2.22` や `0.3.0` だが、番号は次の開発指示で決める。
+次回は通常版・Store版の最新公開済み／申請中パッケージより大きい番号にする。今回の0.3.0は従来の0.2.21より大きい。ユーザーの明示指示なく次のタグ・Release・Store申請を作成しない。
 
-## Git のスナップショット
+## 初回調査時のGitスナップショット（履歴）
 
 確認日時: **2026-11-04 05:57～06:03 JST**。作業ディレクトリ: `D:\test\discxss`。
 
@@ -72,7 +72,8 @@ DiToVR は Discord デスクトップアプリの通知を RPC/IPC で受信し�
 | `src/discord/ipc.rs` | Windows 名前付きパイプ、フレーム・タイムアウト・PING/PONG |
 | `src/discord/notifier.rs`、`context.rs` | 認証、購読、重複除外、通知整形、サーバー・チャンネル情報のキャッシュ |
 | `src/discord/receive.rs`、`presence.rs` | 通常／許可リスト／自動判別のポリシー、Bot Gateway のプレゼンス追跡 |
-| `src/vr/mod.rs` | XSOverlay 送信、画像取得、キュー、送信直前の受信条件・配信用表示の再確認 |
+| `src/vr/mod.rs` | XSOverlay送信、画像取得、キュー、送信直前の受信条件・通知音のみモードの再確認 |
+| `src/audio.rs` | MP3/WAVのデコード・Ogg Vorbis変換・キャッシュ・音声検証 |
 | `src/config/mod.rs`、`storage.rs` | 設定定義・入力検証・互換形式・DPAPI・原子的保存 |
 | `src/diagnostics.rs`、`src/system/mod.rs` | メモリ内の受信診断、DPI、SteamVR 終了検知 |
 | `src-tauri/src/main.rs`、`app.rs` | 起動、Tauri commands / DTO、サービス寿命、トレイ、二重起動防止 |
@@ -365,3 +366,32 @@ spacingの全体走査には、既存サイドバー末尾の自動余白・2行
 - 起動中テスト版のDLLロックを避け、C側 `ditovr-release-check-0.3.0` に検証出力をコピーしdesktopテストを実行した。ユーザーの実設定・起動中アプリは変更していない。
 - 変更点は `docs/release-notes/v0.3.0.md` とCHANGELOGに記載。READMEの未公開表記を更新した。旧画面画像であることは明記を維持した。
 - 署名済みインストーラー・MSIXのMSVCビルド、Defender検査、GitHub公開、更新フィード更新、Store申請の完了はこの時点では未確認。タグのActions結果と実際の公開・受付を照合して追記する。XSOverlay実再生・Store端末更新・実Discord通知の転送は未検証。
+
+## v0.3.0公開結果
+
+2026-11-04 **22:38 JST** の公開確認。ユーザーの明示指示に基づき実装差分・既存の開発文書をコミットし、既存のrelease履歴をマージした。初回調査以降の「未コミット」「未公開」の記録は当時の履歴で、最新状態は本節と冒頭の表を優先する。
+
+- 実装コミット: `73a5b5f`。公開タグ **v0.3.0** のコミット: **`7d553a15bb33b32bf414d64c2ab02c744d24bd4b`**。元の差分を破棄・stash・resetしていない。公開結果の文書コミットを含めてdevelopとreleaseを同期する。
+- [GitHub Release](https://github.com/Yumiiiiiiiiii/DiToVR/releases/tag/v0.3.0)は22:34:27 JSTに公開済み。添付は `DiToVR_0.3.0_x64-setup.exe` のみで、更新用latest.jsonを新Releaseへ再添付していない。旧タグ・過去Release・予約済みidentity・既存署名鍵は変更していない。
+- [通常版CI](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/41837556896)、[Windowsチェック](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/41837557199)、[Store CI](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/41837557341)はすべて成功。同一コミットの重複したdevelopチェックのみ実行中にキャンセルした。通常版の依存監査・テスト・MSVC配布ビルド・インストーラーフック/名称移行検証・Defender・公開・更新フィード更新、Storeのテスト・MSVCビルド・MakeAppx・Defender・申請が成功した。
+- `updates` のHEADは `93117b2`、latest.jsonは0.3.0。移行元bridgeVersionは0.2.2のまま。公開インストーラーを取得し、アプリに組み込まれた公開鍵でEd25519署名・trusted comment・0.3.0へのバージョン結合を検証した。旧リポジトリURLを使う更新URLの互換性も維持している。実際のアプリ内更新インストールは未検証。
+- [BOOTH](https://yuuumiii.booth.pm/items/8621228)は22:37 JSTに無料版・応援用を同一の0.3.0 ZIPへ差し替え、説明文を更新して公開保存した。ファイルIDは10078568。無料0円・応援200円、既存画像・タグ等は維持した。公開ページからZIPを再取得し、アップロードしたZIPとの完全一致・内包インストーラーのGitHubとのSHA-256一致を確認した。旧0.2.2のファイルは保存したまま関連付けを外した。
+- Storeは `DiToVR_0.3.0.0_x64.msix` の申請 **1152921505702314667** が22:34:48 JSTに **PreProcessing** として受付済み。公開完了とは区別する。既存の掲載文・スクリーンショット・価格・審査メモは自動で引き継ぎ、今回の変更点はrelease notesへ反映した。`store/LISTING.ja.md`の機能説明原稿が外部本文へ自動反映されたという意味ではない。処理中の申請を重複作成しない。
+
+### 配布物の照合
+
+| 対象 | SHA-256 / 検査 |
+| --- | --- |
+| 通常版setup | `b1fa728437a0779ec6e01c062f2bd15ae940c648c092398fb50a9a3e261a0d24`。GitHub asset digest・Defenderレポート・実ダウンロード・BOOTH内包exeが一致 |
+| BOOTH ZIP | `3027a1f0d6d4dda52e7ee3ed274aeac55a37ff5ee49c9b06fbad8934952e0046`。内包はsetup 1件のみ |
+| Store MSIX | `7227b0852a3b529b64abd184ba30d1df88fac41d4169b1d7df109f5962900f52`。取得した成果物を検査レポート・実manifest・同梱音声ライセンスと照合 |
+| Defender | 通常版: 定義1.463.122.0、本体・setupの検出なし。Store: 定義1.463.121.0、本体・MSIXの検出なし。Windows AuthenticodeはNotSignedで、更新用署名とは別 |
+
+ローカルの成果物・受付ログ・検査レポート・検証JSONは `%TEMP%\ditovr-release-v0.3.0\`。BOOTHアップロード用ZIPはignoredの `target/release-v0.3.0/`、公開再ダウンロードはignoredの `.playwright-mcp/DiToVR-0-3-0-x64-setup.zip` にもある。秘密情報や実ユーザー設定は成果物・Gitへ追加していない。Dドライブの空き容量は少なく、今後もビルド出力をC側へ分ける。
+
+### 残る実機・外部確認
+
+1. Store申請の認定・公開状態とStore経由の端末更新。申請の受付成功を公開成功と扱わない。
+2. XSOverlayでのMP3/WAV/Ogg・標準音・日本語パス・音量・通知音のみの実音声出力、実Discord受信のVR転送。今回のコードテスト・配布検査では音声を実際に聴けたことにならない。
+3. 実際の通常版インストール・アプリ内自動更新・Storeとの切替。今回利用者の起動中アプリや実設定は変更していない。
+4. README・操作ガイド・外部掲載画像の撮り直しと、Storeの既存掲載本文の新機能説明への反映は未実施。画像が従来版であることはローカルREADME/ガイドに明記した。機能追加・公開済みファイルの差し替えと区別する。

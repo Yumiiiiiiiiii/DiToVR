@@ -89,8 +89,12 @@ https://github.com/Yumiiiiiiiiii/DiToVR/issues
 
 応援用: 「応援用（無料版と同じインストーラー）」、価格は既存の200円を維持。
 
-v0.3.0 の掲載用原稿です。公開ファイルの差し替え完了までは、BOOTH の公開バージョンは別途確認してください。無料版・応援用には、GitHub の `DiToVR_0.3.0_x64-setup.exe` と SHA-256 が一致するインストーラーを `DiToVR_0.3.0_x64-setup.zip` に収めて配布します。署名されていない Store 申請用 MSIX は添付しません。
+2026-11-04 **22:38 JST**、無料版・応援用の両方を `DiToVR_0.3.0_x64-setup.zip` に差し替え、上記の商品紹介文を公開しました。無料は0円、応援用は200円を維持しています。旧版ファイルは提供対象から外し、保管済みファイル自体は削除していません。Store 申請用 MSIX は添付していません。
 
-v0.3.0 の GitHub Release は、依存関係の脆弱性検査と Microsoft Defender 検査の成功後に公開する構成です。最終結果は該当リリースの Actions と検査レポートで確認します。
+公開ページから無料版ZIPを再ダウンロードし、内容が `DiToVR_0.3.0_x64-setup.exe` 1件のみで、GitHub Releaseと同じインストーラーであることを確認しました。応援用も同じBOOTHファイルID `10078568` に関連付けています。
+
+- インストーラー SHA-256: `b1fa728437a0779ec6e01c062f2bd15ae940c648c092398fb50a9a3e261a0d24`
+- ZIP SHA-256: `3027a1f0d6d4dda52e7ee3ed274aeac55a37ff5ee49c9b06fbad8934952e0046`
+- [通常版のCI](https://github.com/Yumiiiiiiiiii/DiToVR/actions/runs/41837556896)で依存監査、回帰テスト、更新用署名付きビルド、インストーラー検証、Defender検査が成功。Defender定義は `1.463.122.0`、本体・インストーラーの検出なし。公開したインストーラーの更新用署名と0.3.0へのバージョン結合を再検証済みです。Windows Authenticodeの署名とは別です。
 
 紹介画像は表紙、通知の設定、初回設定の順。元の画面プレビューと書き出し用ファイルはローカルの `target/booth-update/` に保管します。
