@@ -1,5 +1,13 @@
 # 認証情報とプライバシー
 
+## Discord RPC の利用条件
+
+利用者自身が Discord Developer Portal でアプリを作成し、自分の Client ID・Client Secret を使います。共通の認証情報を配布せず、Discord アカウントトークンは取得しません。Bot は任意のプレゼンス判定専用で、会話はデスクトップアプリの RPC で受信します。
+
+Discord の [OAuth2 資料](https://discord.com/developers/docs/topics/oauth2#shared-resources-oauth2-scopes) では `rpc`・`rpc.notifications.read`・`messages.read` に承認条件があります。本人所有アプリで接続できたという確認は、別の利用者や将来のDiscordでも動く保証ではありません。認証・購読・受信はDiscord側の権限・通知設定・提供条件に依存します。
+
+## 保存・通信と更新
+
 [利用者向けプライバシーポリシー](docs/PRIVACY.md)。Microsoft Store 版の更新は Store が管理し、GitHub の更新確認・取得・NSIS 起動は無効です。更新設定は Store 側で管理します。以下のインストーラー固有の説明は GitHub 配布版向けです。
 
 インストーラー版のアンインストールでは、通常は設定を残します。「アプリケーションデータを削除する」を明示的に選んだ場合だけ、新しい `%APPDATA%\DiToVR`、旧保存先、アプリの画面データを削除します。自動更新時は設定を削除しません。実行ファイルと同じフォルダーに利用者が置いた旧設定や、リポジトリ外の配布用署名鍵はこの処理に含めません。

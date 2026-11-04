@@ -1,7 +1,5 @@
 # 開発ガイド
 
-開発を引き継ぐ場合は、[開発状況と注意事項](CODEX_HANDOFF.md) と [開発ルール](../AGENTS.md) を最初に確認してください。
-
 Microsoft Store 用 MSIX の作成・申請は [Store 配布ガイド](MICROSOFT_STORE.md) を参照してください。
 
 ソースからの起動・検証・署名付きビルド・更新配信を行う開発者と配布者向けの手順です。アプリを使う方は [README](../README.md) と [操作ガイド](UI_GUIDE.md) を参照してください。
@@ -41,7 +39,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-renam
 
 ## 配布者の初回設定
 
-安定版タグの Actions は、npm と両方の Rust lockfile を監査し、Defender の定義を更新して、本体と setup を検査してから公開します。既知の脆弱性・検出・定義更新失敗・検査不能の場合は公開を止めます。Defender の検査結果は `ditovr-security` の成果物に保存します。これは Windows のコード署名とは別の確認で、すべての PC で検出されないことを保証しません。0.2.1 の検出調査と Microsoft への再審査依頼用メモは [Windows Defender の検出調査](WINDOWS_DEFENDER.md) を参照してください。
+安定版タグの Actions は、npm と両方の Rust lockfile を監査し、Defender の定義を更新して、本体と setup を検査してから公開します。既知の脆弱性・検出・定義更新失敗・検査不能の場合は公開を止めます。Defender の検査結果は `ditovr-security` の成果物に保存します。これは Windows のコード署名とは別の確認で、すべての PC で検出されないことを保証しません。
 
 Windows の発行元情報は `src-tauri/tauri.conf.json` の `bundle.publisher` で `DiToVR` に設定しています。アプリ一覧の発行元、実行ファイルとインストーラーの会社名へ反映します。この値と Windows の Authenticode 署名は別のものです。UAC・SmartScreen の認証済み発行元にはコード署名証明書が必要で、更新用の署名鍵ではその表示を変更できません。名称変更時は NSIS フックが旧名のインストールを `/UPDATE` で削除し、設定を保持して DiToVR に置き換えます。
 

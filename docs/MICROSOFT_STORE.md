@@ -96,7 +96,7 @@ Store のテストは先に `npm run build` で `dist` を生成します。Taur
 - Windows 10 build 19041 以降、x64 向け。Microsoft Edge WebView2 Evergreen Runtime が必要です。未導入の場合は Microsoft 公式 Runtime を先に導入します。
 - 設定先は `%APPDATA%\DiToVR` です。MSIX の AppData 仮想化によりパッケージのユーザーデータ領域に保存される場合があります。GitHub 版との設定共有・移行は保証せず、初回案内から設定します。アンインストールは Windows のアプリ管理から行います。
 
-[登録文と審査手順](../store/LISTING.ja.md)、[プライバシーポリシー](PRIVACY.md) を用意しています。掲載用の4画像は `target/store-upload/DiToVR-0.2.1/images/` にある、ダミー情報のプレビューです。無料・PC 向けで公開しています。プライバシーポリシーは Partner Center の本文入力で登録済みです。
+掲載情報・審査メモ・画像は Partner Center で管理し、自動更新申請では公開済みの内容を引き継ぎます。[プライバシーポリシー](PRIVACY.md) は Partner Center の本文入力で登録済みです。無料・PC 向けで、掲載画像にはダミー情報を使っています。
 
 Store 経由のインストール、二重起動、RPC、XSOverlay、更新、アンインストールは実機確認が必要です。連携設定時には読み取り専用の接続確認を使用し、バージョンを変更せずに更新申請や新規バージョンタグを作ることはありません。
 

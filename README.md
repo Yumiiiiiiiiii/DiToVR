@@ -106,7 +106,7 @@ Microsoft Store から入れた場合は、Store のアプリ自動更新を使�
 
 Microsoft Defender のセキュリティインテリジェンス（保護定義）を最新に更新し、[Releases](https://github.com/Yumiiiiiiiiii/DiToVR/releases) の setup を再確認してください。[Microsoft の更新案内](https://www.microsoft.com/en-us/wdsi/defenderupdates) も参照できます。
 
-更新後も検出される場合は実行を中止し、検出名・アプリのバージョン・Defender の定義バージョンを添えて [Issues](https://github.com/Yumiiiiiiiiii/DiToVR/issues) へお知らせください。認証情報や会話の内容は含めないでください。確認済みの検出と対応状況は [検出調査](docs/WINDOWS_DEFENDER.md) に記録しています。
+更新後も検出される場合は実行を中止し、検出名・アプリのバージョン・Defender の定義バージョンを添えて [Issues](https://github.com/Yumiiiiiiiiii/DiToVR/issues) へお知らせください。認証情報や会話の内容は含めないでください。公開時の検査結果は [Actions](https://github.com/Yumiiiiiiiiii/DiToVR/actions/workflows/release.yml) の検査レポートで確認できます。
 
 ## 通知が届かないとき
 
@@ -140,13 +140,13 @@ Client Secret、OAuth トークン、任意の Bot Token は Windows ユーザ�
 
 新しい保存先に設定がない場合は、旧名の `%APPDATA%\discord-to-vr`、さらに以前の `%APPDATA%\io.github.yumiiiiiiiiii.discord-to-vr` の順に設定・更新設定をコピーして引き継ぎます。以前の設定がなければ、実行ファイルと同じフォルダーの旧 `config.json` を引き継ぎます。元のファイルは残し、新しい保存先にある設定は上書きしません。
 
-Discord RPC の利用・承認条件には環境による制約があります。[調査と設計レビュー](docs/RPC_DISTRIBUTION_REVIEW.md) にまとめています。暗号化、旧設定の移行、通知やログの扱いは [SECURITY.md](SECURITY.md) を参照してください。
+Discord RPC の利用・承認条件には環境による制約があります。承認条件、暗号化、旧設定の移行、通知やログの扱いは [SECURITY.md](SECURITY.md) を参照してください。
 
 ## 生成 AI の使用について
 
 本プロジェクトでは、**コードの作成・修正、UI の設計、ドキュメントの作成に生成 AI を使用しています。** この README の作成にも使用しています。
 
-自動テストや画面の動作確認を行い、確認できた範囲と未検証の項目を [検証状況](IMPROVEMENTS.md#検証) に記載しています。認証情報やプライバシーの扱いは [SECURITY.md](SECURITY.md)、Discord の利用・承認条件は [設計レビュー](docs/RPC_DISTRIBUTION_REVIEW.md) で公開しています。気になる方は、ソースコードとこれらの情報を確認したうえで利用をご判断ください。
+自動テストや画面の動作確認を行い、公開前のビルド・テスト結果は [Actions](https://github.com/Yumiiiiiiiiii/DiToVR/actions) で確認できます。XSOverlayでの実音声出力・実Discord通知のVR転送・実際の更新インストールは未検証です。認証情報・プライバシー・Discordの承認条件は [SECURITY.md](SECURITY.md) を参照してください。
 
 不具合や説明の誤りを見つけた場合は、[Issues](https://github.com/Yumiiiiiiiiii/DiToVR/issues) でお知らせください。報告時に Client Secret・トークン・実際の会話内容を含めないでください。
 
@@ -158,7 +158,6 @@ Discord RPC の利用・承認条件には環境による制約があります�
 | 初回設定・日常操作・許可リスト・Bot・受信診断 | [操作ガイド](docs/UI_GUIDE.md) |
 | 自動更新の使い方・オン／オフ・設定の引き継ぎ | [自動アップデート](docs/AUTO_UPDATE.md) |
 | 認証情報・プライバシー・設定移行 | [セキュリティ](SECURITY.md) |
-| 実装済みの改善・検証状況・今後の候補 | [改善内容](IMPROVEMENTS.md) |
-| Discord 接続の利用条件と制約 | [設計レビュー](docs/RPC_DISTRIBUTION_REVIEW.md) |
+| Discord 接続の利用条件と制約 | [セキュリティ](SECURITY.md#discord-rpc-の利用条件) |
 
 開発やビルド、配布の手順は [開発ガイド](docs/DEVELOPMENT.md) を参照してください。

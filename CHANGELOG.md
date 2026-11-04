@@ -75,4 +75,4 @@
 - 自動更新の公開運用には GitHub Actions の署名鍵設定と、署名付き安定版 Release の公開が必要です。
 - 更新用署名と Windows の Authenticode 署名は別です。現在の配布物は Authenticode 未署名で、UAC の確認済み発行元には別途コード署名証明書が必要です。
 
-検証の詳細と制約は [改善内容](IMPROVEMENTS.md#検証)、[セキュリティ](SECURITY.md)、[Discord RPC の設計レビュー](docs/RPC_DISTRIBUTION_REVIEW.md) を参照してください。
+検証手順は [開発ガイド](docs/DEVELOPMENT.md)、認証情報・通信・Discord RPC の制約は [セキュリティ](SECURITY.md) を参照してください。

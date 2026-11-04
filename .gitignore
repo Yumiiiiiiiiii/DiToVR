@@ -28,3 +28,12 @@ config.json
 *.swp
 .DS_Store
 Thumbs.db
+
+# Local development handoff, investigation reports and listing drafts
+/AGENTS.md
+/IMPROVEMENTS.md
+/docs/BOOTH.md
+/docs/CODEX_HANDOFF.md
+/docs/RPC_DISTRIBUTION_REVIEW.md
+/docs/WINDOWS_DEFENDER.md
+/store/LISTING.ja.md
