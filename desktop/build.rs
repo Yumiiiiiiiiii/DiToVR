@@ -44,7 +44,7 @@ fn find_rc() -> PathBuf {
         return PathBuf::from("rc.exe");
     }
     let kits = PathBuf::from(
-        env::var_os("ProgramFiles(x86)").unwrap_or_else(|| "C:\Program Files (x86)".into()),
+        env::var_os("ProgramFiles(x86)").unwrap_or_else(|| r"C:\Program Files (x86)".into()),
     )
     .join("Windows Kits")
     .join("10")
