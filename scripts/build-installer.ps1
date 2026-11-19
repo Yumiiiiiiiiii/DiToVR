@@ -44,8 +44,9 @@ if ($Sign) {
         if (!(Test-Path -LiteralPath $key -PathType Leaf)) { throw 'Set TAURI_SIGNING_PRIVATE_KEY to the existing updater key. Do not regenerate it.' }
         $env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content -Raw -Encoding UTF8 $key).Trim()
     }
-    $signTarget = Join-Path $repoRoot 'target/sign-update'
-    cargo run --release --locked --manifest-path tools/sign-update/Cargo.toml --target-dir $signTarget -- $setup $version
+    # The existing updater key is used through the Tauri CLI's signer only (no Tauri app dependency).
+    # --app-version binds the signed version into the signature's trusted comment, which the app requires.
+    npx --yes @tauri-apps/cli@2.12.6 signer sign --app-version $version $setup
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 Write-Host "Installer: $setup"

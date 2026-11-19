@@ -62,8 +62,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --manifest-path desktop/Cargo.toml --locked --features microsoft-store
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --manifest-path tools/sign-update/Cargo.toml --locked
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/store-release-ready.test.mjs scripts/check-store-connection.test.mjs
       - name: Build release with updater signatures
         if: github.ref_type == 'tag'
