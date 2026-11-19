@@ -24,13 +24,39 @@ fn main() {
         ),
     )
     .expect("Could not write icon resource");
-    let status = Command::new("rc.exe")
+    let status = Command::new(find_rc())
         .arg("/nologo")
         .arg("/fo")
         .arg(&compiled)
         .arg(&resource)
         .status()
-        .expect("Windows SDK rc.exe is required; run build.ps1");
+        .expect("Windows SDK rc.exe is required");
     assert!(status.success(), "Could not compile DiToVR icon resource");
     println!("cargo:rustc-link-arg-bins={}", compiled.display());
+}
+
+/// PATHにrc.exeがなければ(CIなど)、Windows SDKの最新版から探す。
+fn find_rc() -> PathBuf {
+    let in_path = env::var_os("PATH")
+        .map(|p| env::split_paths(&p).any(|d| d.join("rc.exe").is_file()))
+        .unwrap_or(false);
+    if in_path {
+        return PathBuf::from("rc.exe");
+    }
+    let kits = PathBuf::from(
+        env::var_os("ProgramFiles(x86)").unwrap_or_else(|| "C:\Program Files (x86)".into()),
+    )
+    .join("Windows Kits")
+    .join("10")
+    .join("bin");
+    let mut versions: Vec<PathBuf> = fs::read_dir(&kits)
+        .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect())
+        .unwrap_or_default();
+    versions.sort();
+    versions
+        .into_iter()
+        .rev()
+        .map(|v| v.join("x64").join("rc.exe"))
+        .find(|p| p.is_file())
+        .expect("Windows SDK rc.exe was not found")
 }
