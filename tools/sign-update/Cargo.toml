@@ -1,0 +1,12 @@
+[package]
+name = "ditovr-sign-update"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Signs update installers (minisign, version-bound trusted comment) with the existing updater key"
+
+[workspace]
+
+[dependencies]
+minisign = "0.7"
+base64 = "0.22"

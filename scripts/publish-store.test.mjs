@@ -5,7 +5,7 @@ import {deflateRawSync} from "node:zlib";
 import {singleFileZip, zipEntry} from "./store-archive.mjs";
 import {storeManifest} from "./store-manifest.mjs";
 import {validateArtifact, updateSubmission, uploadUrl, createStoreClient, publishStore, storeReleaseTag, storeVersionTag} from "./publish-store.mjs";
-import {validateVersion} from "./release-manifest.mjs";
+import {readProduct, validateVersion} from "./release-manifest.mjs";
 import {readFileSync} from "node:fs";
 
 test("publication requires an enabled version tag or an explicit retry, never a preview, fork or arbitrary ref", () => {
@@ -26,11 +26,11 @@ test("publication requires an enabled version tag or an explicit retry, never a 
   ]) assert.throws(() => storeReleaseTag(env));
 });
 
-test("Store-only tags validate the application version without becoming normal release tags", () => {
+test("Store-only tags validate the application version without becoming normal release tags", async () => {
   assert.equal(storeVersionTag("store-v0.2.21"), "v0.2.21");
   assert.equal(storeVersionTag("v0.2.21"), "v0.2.21");
   for (const tag of [undefined, "store-v0.2.21\n", "store-v0.2.21/other", "store-store-v0.2.21", "store-v0.2", "store-v0.2.21-beta"]) assert.throws(() => storeVersionTag(tag));
-  const config = JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+  const {config} = await readProduct();
   config.version = "0.2.21";
   const cargo = 'version = "0.2.21"';
   const pkg = {version: "0.2.21"};

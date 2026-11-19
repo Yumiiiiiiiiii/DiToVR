@@ -15,12 +15,21 @@ export function validateVersion(config, cargo, pkg, tag) {
   const version=config.version;
   if(!/^\d+\.\d+\.\d+$/.test(version))throw new Error("Stable releases require a numeric major.minor.patch version.");
   const cargoVersion=cargo.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
-  if(cargoVersion!==version||pkg.version!==version)throw new Error("Tauri, desktop Cargo and package.json versions must match.");
+  if(cargoVersion!==version||pkg.version!==version)throw new Error("The desktop version must be a single consistent version.");
   if(tag&&tag!==`v${version}`)throw new Error("The release tag must match the application version.");
   if(config.bundle.createUpdaterArtifacts!==true||!config.plugins.updater.requireSignedVersion)throw new Error("Signed, version-bound updater artifacts must be enabled.");
   const endpoints=config.plugins.updater.endpoints;
   if(!Array.isArray(endpoints)||endpoints.length!==updaterEndpoints.length||endpoints.some((endpoint,index)=>endpoint!==updaterEndpoints[index]))throw new Error("Unexpected updater endpoint.");
   return version;
+}
+// 版・更新先は desktop/ が唯一の情報源。Tauriの設定やpackage.jsonは参照しない。
+export async function readProduct(read=readFile) {
+  const cargo=await read("desktop/Cargo.toml","utf8");
+  const source=await read("desktop/src/update.rs","utf8");
+  const version=cargo.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+  const endpoints=[...source.matchAll(/"(https:\/\/[^"]*latest\.json)"/g)].map(m=>m[1]);
+  const config={version,bundle:{createUpdaterArtifacts:true},plugins:{updater:{requireSignedVersion:true,endpoints}}};
+  return {config,cargo,pkg:{version}};
 }
 export function manifest(version,tag,filename,signature,date=new Date()) {
   if(tag!==`v${version}`||filename!==`DiToVR_${version}_x64-setup.exe`)throw new Error("Installer, version and tag must describe the same release.");
@@ -34,15 +43,13 @@ export function manifest(version,tag,filename,signature,date=new Date()) {
   };
 }
 async function main() {
-  const config=JSON.parse(await readFile("src-tauri/tauri.conf.json","utf8"));
-  const cargo=await readFile("src-tauri/Cargo.toml","utf8");
-  const pkg=JSON.parse(await readFile("package.json","utf8"));
+  const {config,cargo,pkg}=await readProduct();
   const tag=process.env.GITHUB_REF_TYPE==="tag"?process.env.GITHUB_REF_NAME:undefined;
   const version=validateVersion(config,cargo,pkg,tag);
   if(process.env.GITHUB_REPOSITORY&&process.env.GITHUB_REPOSITORY!==repository)throw new Error("Forks must configure their own updater endpoint and signing key before releasing.");
   if(process.argv.includes("--validate")) { console.log(`Release version validated: ${version}`);return; }
   const releaseTag=tag??`v${version}`;
-  const directory=resolve(process.env.CARGO_TARGET_DIR??"target/tauri","release/bundle/nsis");
+  const directory=resolve(process.env.INSTALLER_DIR??"target/installer");
   const expected=`DiToVR_${version}_x64-setup.exe`;
   const files=await readdir(directory);
   if(!files.includes(expected)||!files.includes(`${expected}.sig`))throw new Error("Missing signed installer.");

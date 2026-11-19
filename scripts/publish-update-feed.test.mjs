@@ -35,12 +35,12 @@ function githubFixture(state, version, includeLegacyManifest, overrides = {}) {
 test("only the migration release retains latest.json, including retries and minor version jumps", () => {
   const first = distributionPlan("0.2.2", null);
   assert.equal(first.includeLegacyManifest, true);
-  assert.deepEqual(first.files, ["target/tauri/release/bundle/nsis/DiToVR_0.2.2_x64-setup.exe", "latest.json"]);
+  assert.deepEqual(first.files, ["target/installer/DiToVR_0.2.2_x64-setup.exe", "latest.json"]);
   assert.equal(distributionPlan("0.2.2", snapshot()).includeLegacyManifest, true);
   assert.equal(distributionPlan("0.2.3", snapshot()).includeLegacyManifest, false);
   assert.equal(distributionPlan("0.2.3", snapshot("0.2.3")).includeLegacyManifest, false);
   assert.deepEqual(distributionPlan("1.0.0", snapshot()).files,
-    ["target/tauri/release/bundle/nsis/DiToVR_1.0.0_x64-setup.exe"]);
+    ["target/installer/DiToVR_1.0.0_x64-setup.exe"]);
   assert.throws(() => distributionPlan("0.2.2", snapshot("0.2.3")));
   assert.throws(() => distributionPlan("0.2.3", {...snapshot(), bridgeVersion: "0.2.4"}));
 });

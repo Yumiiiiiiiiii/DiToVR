@@ -6,30 +6,43 @@ Microsoft Store 用 MSIX の作成・申請は [Store 配布ガイド](MICROSOFT
 
 ## 開発環境と検証
 
-画面は Tauri 2 + React + TypeScript、通知転送・認証・暗号化は Rust で実装しています。通常の Windows ビルドには Node.js 22 LTS、Rust stable の MSVC ツールチェーン、Visual Studio Build Tools の「C++ によるデスクトップ開発」、WebView2 が必要です。VS Code だけでは MSVC の `link.exe` は導入されません。
+画面と処理は Rust のネイティブアプリ（GPUI）で、通知転送・認証・暗号化は共通 Core（ルートの `ditovr-core`）が担当します。ビルドには Rust stable の MSVC ツールチェーンと、Visual Studio Build Tools の「C++ によるデスクトップ開発」・Windows SDK が必要です。配布スクリプトのテストに Node.js 22 を使います。VS Code だけでは MSVC の `link.exe` は導入されません。
+
+| 場所 | 内容 |
+| --- | --- |
+| `src/`、ルートの `Cargo.toml` | 共通 Core（Discord IPC、受信判定、XSOverlay、音声、設定、診断） |
+| `desktop/` | 製品本体（GPUI）。独立した Cargo manifest / lockfile。`installer/` に NSIS、`tests/fixtures/` に更新署名の検証データ |
+| `tools/sign-update/` | 更新インストーラーへバージョン入りの署名を付ける小さなツール |
+| `scripts/`、`store/`、`.github/workflows/` | 配布・Store 申請・CI |
+
+通常版と Microsoft Store 版は同じ `DiToVR.exe` です。`microsoft-store` feature で Store 版になり、独自の更新処理を持ちません。
 
 ```powershell
-npm.cmd ci
-npm.cmd run desktop:dev
+powershell -NoProfile -ExecutionPolicy Bypass -File desktop/build.ps1 -Release        # 通常版
+powershell -NoProfile -ExecutionPolicy Bypass -File desktop/build.ps1 -Release -Store # Store 版
 ```
 
+出力は `%LOCALAPPDATA%/DiToVRBuildCache/desktop-standard|desktop-store/release/DiToVR.exe` です。`-Check`、`-Clippy`、`-Test` も使えます。ダミー表示の確認は `DiToVR.exe --ui-preview`（実設定・外部接続なし）、実受信の診断は `--debug` です。
+
 ```powershell
-npm.cmd run build
+cargo fmt --check
+cargo fmt --manifest-path desktop/Cargo.toml --check
 cargo test --locked
-cargo test --manifest-path src-tauri/Cargo.toml --locked --features custom-protocol
+cargo test --manifest-path desktop/Cargo.toml --locked
+cargo test --manifest-path desktop/Cargo.toml --locked --features microsoft-store
 cargo clippy --locked --all-targets -- -D warnings
-cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --features custom-protocol -- -D warnings
-node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/check-store-connection.test.mjs
+cargo clippy --manifest-path desktop/Cargo.toml --locked --all-targets -- -D warnings
+cargo clippy --manifest-path desktop/Cargo.toml --locked --all-targets --features microsoft-store -- -D warnings
+node --test scripts/*.test.mjs
 ```
 
-インストーラーを一度ビルドすると、Tauri の NSIS を使ってアンインストール時の設定削除を検証できます。
+アンインストール時の設定削除処理は、NSIS（`makensis`）を使って隔離した場所で検証できます。
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-hooks.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-rename.ps1
 ```
 
-この検証はワークスペースの `target` 内に作ったダミー設定だけを使います。実際のアプリや AppData は削除せず、設定を残す場合・自動更新時・明示的にデータ削除を選んだ場合を確認します。カスタム保存先の削除処理は `src-tauri/installer-hooks.nsh` にあり、Tauri 標準の削除チェックが選択され、更新モードでない場合だけ動作します。
+この検証はワークスペースの `target` 内に作ったダミー設定だけを使います。実際のアプリ設定には触れません。
 
 署名付き配布ビルドには更新用の秘密鍵が必要です。[ビルド・公開手順](#ローカルで署名付きビルドを作る) を参照してください。用意済みの GNU / LLVM-MinGW 環境を使うローカルビルドは `npm.cmd run desktop:build:local` で実行でき、既定では `target/tauri` に出力します。このコマンドは別の PC にコンパイラーを自動インストールするものではありません。
 
@@ -73,24 +86,13 @@ Windows の発行元情報は `src-tauri/tauri.conf.json` の `bundle.publisher`
 
 ## ローカルで署名付きビルドを作る
 
-この PC は MSVC の `link.exe` がないため、用意済みの Rust GNU ツールチェーンと LLVM-MinGW を使います。プロジェクトのルートで次のコマンドを実行してください。
+通常版のインストーラーは次のコマンドで作ります。`-Sign` を付けると、既存の更新鍵（`TAURI_SIGNING_PRIVATE_KEY`、未設定なら `%LOCALAPPDATA%\DiToVR-release-signing\updater.key`）で署名します。鍵は再生成しません。
 
 ```powershell
-npm.cmd run desktop:build:local
-```
-
-このコマンドは `%TEMP%\discord-vr-portable-compiler` の msvcrt / x86_64 コンパイラーと `gcc-runtime` を確認して、ビルド用プロセス内だけに環境変数を設定します。既定の Rust ツールチェーン・システム PATH・PowerShell の実行ポリシーは変更しません。署名用鍵は上記の既存ファイルを使い、再生成しません。`CARGO_TARGET_DIR` の指定がなければ `target/tauri` へ出力し、成功後に `latest.json` も生成します。コンパイラーを別の場所へ移した場合は `npm.cmd run desktop:build:local -- -CompilerRoot 'D:/path/to/discord-vr-portable-compiler'` と指定します。
-
-別の PC で通常の MSVC ビルドをする場合は、Visual Studio Build Tools の「C++ によるデスクトップ開発」（MSVC と Windows SDK）をインストールし、Developer PowerShell などで `link.exe` が利用できる環境から次を実行します。VS Code のみではリンカーは導入されません。GitHub の Windows Actions は MSVC が利用できる環境なので通常のコマンドを使います。
-
-```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY = Join-Path $env:LOCALAPPDATA 'DiscordToVR-release-signing/updater.key'
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ''
-$env:CARGO_TARGET_DIR = Join-Path (Get-Location) 'target/tauri'
-npm.cmd run desktop:build -- --ci -- --locked
+./scripts/build-installer.ps1 -Sign
 node scripts/release-manifest.mjs
 ```
 
-`latest.json` はアプリバージョン・タグ・インストーラー名・署名のバージョンが一致する場合だけ生成します。署名はこの更新情報に含まれるため、`.sig` の個別添付は不要です。ビルド時の署名生成は引き続き必要で、Actions の成果物には検証用の `.sig` と更新情報を保存します。ローカルビルドは生成までで、配信先への書き込みは行いません。公開はタグの Actions から行ってください。秘密鍵を紛失した場合、既存の公開鍵を持つアプリへ新しい鍵で自動更新することはできません。
+`target/installer/DiToVR_<版>_x64-setup.exe` と `.sig`、続いて `latest.json` を作ります。署名にはバージョンが結び付き、アプリは通知された版と署名済みの版が一致しない更新を拒否します。
 
-仕組みの詳細: [Tauri 2 の Updater](https://v2.tauri.app/plugin/updater/)
+`latest.json` はアプリバージョン・タグ・インストーラー名・署名のバージョンが一致する場合だけ生成します。署名はこの更新情報に含まれるため、`.sig` の個別添付は不要です。ビルド時の署名生成は引き続き必要で、Actions の成果物には検証用の `.sig` と更新情報を保存します。ローカルビルドは生成までで、配信先への書き込みは行いません。公開はタグの Actions から行ってください。秘密鍵を紛失した場合、既存の公開鍵を持つアプリへ新しい鍵で自動更新することはできません。

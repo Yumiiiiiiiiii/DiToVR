@@ -1,9 +1,7 @@
 # Rust build artifacts and cache
 /target/
-/src-tauri/target/
-/src-tauri/gen/schemas/
-/node_modules/
-/dist/
+/desktop/target/
+/tools/sign-update/target/
 /latest.json
 /DiToVR-tauri.zip
 /discord_To_VR-tauri.zip
@@ -44,5 +42,6 @@ Thumbs.db
 /ARCHITECTURE.md
 /experiments/
 /ui-concepts/
+/docs/gpui-history/
 /.agents/
 /.better-design/

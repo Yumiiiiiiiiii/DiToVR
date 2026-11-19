@@ -15,31 +15,50 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/desktop
+          key: ${{ runner.os }}-desktop-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-desktop-cargo-
       - name: Format
         run: |
           cargo fmt --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo fmt --manifest-path src-tauri/Cargo.toml --check
-      - name: Frontend
-        run: |
-          npm ci
+          cargo fmt --manifest-path desktop/Cargo.toml --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/store-release-ready.test.mjs scripts/visible-poll.test.mjs
+          cargo fmt --manifest-path tools/sign-update/Cargo.toml --check
+      - name: Release scripts
+        run: node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/store-release-ready.test.mjs scripts/check-store-connection.test.mjs
       - name: Regression tests
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/desktop
         run: |
           cargo test --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --manifest-path src-tauri/Cargo.toml --locked --features custom-protocol
+          cargo test --manifest-path desktop/Cargo.toml --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path desktop/Cargo.toml --locked --features microsoft-store
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path tools/sign-update/Cargo.toml --locked
       - name: Clippy
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/desktop
         run: |
           cargo clippy --locked --all-targets -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --features custom-protocol -- -D warnings
+          cargo clippy --manifest-path desktop/Cargo.toml --locked --all-targets -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo clippy --manifest-path desktop/Cargo.toml --locked --all-targets --features microsoft-store -- -D warnings
       - name: Build
-        run: cargo build --manifest-path src-tauri/Cargo.toml --locked --features custom-protocol
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/desktop
+        run: |
+          cargo build --manifest-path desktop/Cargo.toml --locked --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build --manifest-path desktop/Cargo.toml --locked --release --features microsoft-store

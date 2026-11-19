@@ -1,11 +1,11 @@
 param(
-    [string]$Makensis = (Join-Path $env:LOCALAPPDATA 'tauri/NSIS/makensis.exe')
+    [string]$Makensis = $(if (Get-Command makensis -ErrorAction SilentlyContinue) { (Get-Command makensis).Source } elseif (Test-Path 'C:/Program Files (x86)/NSIS/makensis.exe') { 'C:/Program Files (x86)/NSIS/makensis.exe' } else { Join-Path $env:LOCALAPPDATA 'tauri/NSIS/makensis.exe' })
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 if (!(Test-Path -LiteralPath $Makensis -PathType Leaf)) {
-    throw 'NSIS is required. Build a Tauri installer first, or specify -Makensis.'
+    throw 'NSIS (makensis) is required. Install NSIS or specify -Makensis.'
 }
 $workspace = (Resolve-Path -LiteralPath $repoRoot).Path
 $fixtureRoot = Join-Path $workspace ('target/uninstall-hook-fixture-' + [guid]::NewGuid().ToString('N'))
@@ -14,7 +14,7 @@ $fixtureRoot = (Resolve-Path -LiteralPath $fixtureRoot).Path
 if (!$fixtureRoot.StartsWith($workspace + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The fixture must be inside the workspace.'
 }
-$hook = Get-Content -LiteralPath (Join-Path $repoRoot 'src-tauri/installer-hooks.nsh') -Raw -Encoding UTF8
+$hook = Get-Content -LiteralPath (Join-Path $repoRoot 'desktop/installer/cleanup.nsh') -Raw -Encoding UTF8
 foreach ($productionDirectory in @('"$APPDATA\DiToVR"', '"$APPDATA\discord-to-vr"')) {
     if ($hook.Split(@($productionDirectory), [StringSplitOptions]::None).Count -ne 2) {
         throw 'Unexpected hook cleanup path. Review the fixture before executing.'
@@ -65,7 +65,7 @@ Var UpdateMode
 Section
   StrCpy $DeleteAppDataCheckboxState @SELECTED@
   StrCpy $UpdateMode @UPDATING@
-  !insertmacro NSIS_HOOK_POSTUNINSTALL
+  !insertmacro DITOVR_POSTUNINSTALL
 SectionEnd
 '@
     $script = $script.Replace('@EXE@', $fixtureExe).Replace('@HOOK@', $hookFile).

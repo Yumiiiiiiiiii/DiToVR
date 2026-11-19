@@ -16,19 +16,12 @@ Microsoft が署名・ホストする MSIX を使用します。GitHub の NSIS 
 Windows、Node.js、Rust、C++ ビルド環境、Windows SDK の MakeAppx が必要です。
 
 ```powershell
-npm.cmd ci
-npm.cmd run desktop:build:store
-```
-
-この環境のローカル GNU ツールチェーンを使う場合:
-
-```powershell
-npm.cmd run desktop:build:store -- -CompilerRoot 'D:/test/discxss/target/security-analysis-tools/compiler'
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-store.ps1
 ```
 
 `target/store/<ビルドID>/DiToVR_0.2.1.0_x64.msix` を生成します。3桁バージョンに `.0` を付けます。更新には前回より大きいバージョンが必要です。Tauri、npm、デスクトップ Cargo のバージョンを合わせて更新します。
 
-Store 用 feature を有効にして NSIS を作らず、実行ファイル、ライセンス、アイコン、ビルドに必要な Microsoft の WebView2Loader.dll だけを新しい作業フォルダーへコピーします。設定・秘密鍵は含めません。SDK のマニフェスト検証を省略せず、実行ファイル、DLL、MSIX を Defender で検査します。検査できない場合や検出時は失敗します。
+Store 用 feature を有効にして NSIS を作らず、実行ファイル、ライセンス、アイコン、新しい作業フォルダーへコピーします。設定・秘密鍵は含めません。SDK のマニフェスト検証を省略せず、実行ファイル、DLL、MSIX を Defender で検査します。検査できない場合や検出時は失敗します。
 
 **未署名 MSIX は Store アップロード専用**です。Microsoft が認定後に署名するため、購入した証明書や Tauri 更新署名鍵は不要です。この MSIX を一般利用者に直接配布しないでください。
 
@@ -86,14 +79,14 @@ CI の修正がタグ作成後に必要になった場合は、修正を `releas
 
 このモードは、指定タグのアプリのソースと、ワークフローを実行したコミットの修正済み申請処理を別々に取得します。実際のチェックアウト・アプリバージョン・変更点が指定タグに一致することを認証前に確認します。通常のビルド・読み取り確認・fork・バージョン以外の参照からは申請できません。既存の下書きや審査中の申請がある場合は停止し、自動削除・上書きは行いません。
 
-Store のテストは先に `npm run build` で `dist` を生成します。Tauri の `custom-protocol` 付き Rust テストもこの画面成果物を必要とするため、初回ビルドで省略できません。
+Store のテストは `desktop` を `microsoft-store` feature でテストします。
 
 ## 動作と検証
 
 - Store feature または Windows パッケージ ID がある場合、GitHub 更新の確認・取得・NSIS 起動・更新設定の書き込みを拒否します。パッケージ ID 確認の予期しないエラー時も GitHub 更新を無効にします。
 - アプリ内の「アプリの更新」メニュー・更新画面・更新通知は表示しません。独自の更新処理と IPC コマンドは Store ビルドから除外し、更新プラグインの登録や更新設定ファイルの読み込み・移行も行いません。現在のバージョンは通常のアプリ状態からサイドバー下部に表示します。更新は Microsoft Store の「ライブラリ」で管理します。
 - `runFullTrust` は Discord のローカル RPC、XSOverlay、トレイ、ファイル選択、DPAPI に必要です。管理者権限は要求しません。
-- Windows 10 build 19041 以降、x64 向け。Microsoft Edge WebView2 Evergreen Runtime が必要です。未導入の場合は Microsoft 公式 Runtime を先に導入します。
+- Windows 10 build 19041 以降、x64 向け。公式 Runtime を先に導入します。
 - 設定先は `%APPDATA%\DiToVR` です。MSIX の AppData 仮想化によりパッケージのユーザーデータ領域に保存される場合があります。GitHub 版との設定共有・移行は保証せず、初回案内から設定します。アンインストールは Windows のアプリ管理から行います。
 
 掲載情報・審査メモ・画像は Partner Center で管理し、自動更新申請では公開済みの内容を引き継ぎます。[プライバシーポリシー](PRIVACY.md) は Partner Center の本文入力で登録済みです。無料・PC 向けで、掲載画像にはダミー情報を使っています。
