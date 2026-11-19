@@ -24,6 +24,12 @@ if (!$Makensis) {
     if ($found) { $Makensis = $found.Source }
     elseif (Test-Path 'C:/Program Files (x86)/NSIS/makensis.exe') { $Makensis = 'C:/Program Files (x86)/NSIS/makensis.exe' }
     elseif (Test-Path (Join-Path $env:LOCALAPPDATA 'tauri/NSIS/makensis.exe')) { $Makensis = Join-Path $env:LOCALAPPDATA 'tauri/NSIS/makensis.exe' }
+    elseif ($env:GITHUB_ACTIONS -eq 'true') {
+        # Hosted runners do not ship NSIS; install it from Chocolatey (CI only).
+        choco install nsis -y --no-progress
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $Makensis = 'C:/Program Files (x86)/NSIS/makensis.exe'
+    }
     else { throw 'NSIS (makensis) is required. Install NSIS or pass -Makensis.' }
 }
 $outDir = Join-Path $repoRoot 'target/installer'
