@@ -14,9 +14,9 @@
       {
         "label": "main",
         "title": "DiToVR",
-        "width": 1120,
-        "height": 900,
-        "minWidth": 820,
+        "width": 1000,
+        "height": 840,
+        "minWidth": 640,
         "minHeight": 620,
         "center": true
       }
@@ -33,7 +33,10 @@
     "createUpdaterArtifacts": true,
     "targets": ["nsis"],
     "licenseFile": "../LICENSE",
-    "resources": { "../THIRD_PARTY_AUDIO_NOTICES.txt": "THIRD_PARTY_AUDIO_NOTICES.txt" },
+    "resources": {
+      "../THIRD_PARTY_AUDIO_NOTICES.txt": "THIRD_PARTY_AUDIO_NOTICES.txt",
+      "../THIRD_PARTY_UI_NOTICES.txt": "THIRD_PARTY_UI_NOTICES.txt"
+    },
     "icon": ["icons/icon.ico"],
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper" },

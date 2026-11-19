@@ -103,7 +103,7 @@ jobs:
         run: |
           npm run build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/check-store-connection.test.mjs
+          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/store-release-ready.test.mjs scripts/check-store-connection.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Download, RefreshCw, ShieldCheck, Info, CheckCheck } from "lucide-react";
 import { api, errorMessage } from "./bridge";
 import "./updates.css";
+import { startVisiblePolling } from "./visible-poll";
 
 export interface UpdateStatus {
   currentVersion: string;
@@ -20,21 +21,22 @@ export interface UpdateStatus {
 }
 export function useUpdateStatus(enabled: boolean) {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!enabled) {
       setStatus(null);
+      setError(null);
       return;
     }
     let active = true;
     const refresh = async () => {
-      try { const next=await api<UpdateStatus>("get_update_status"); if(active)setStatus(next); }
-      catch { /* Retried; actions show their own error. */ }
+      const next=await api<UpdateStatus>("get_update_status");
+      if(active){setStatus(next);setError(null);}
     };
-    void refresh();
-    const timer=setInterval(()=>void refresh(),1000);
-    return ()=>{active=false;clearInterval(timer);};
+    const stop=startVisiblePolling(refresh,{onError:e=>{if(active)setError(errorMessage(e));}});
+    return ()=>{active=false;stop();};
   },[enabled]);
-  return enabled ? status : null;
+  return {status:enabled?status:null,error:enabled?error:null};
 }
 const labels = {
   idle: "更新の確認を待っています", checking: "新しいバージョンを確認中…",
@@ -64,7 +66,7 @@ export function UpdatesPanel({status}:{status:UpdateStatus|null}) {
       <div className="section-heading"><div><h2>現在のバージョン</h2><p>DiToVR <strong>v{status?.currentVersion??"読み込み中"}</strong></p></div><ShieldCheck size={24}/></div>
       <div className="update-card-body">
         {status?.disabledReason&&<p className="update-info"><Info size={18}/>{status.disabledReason}</p>}
-        <label className="update-toggle"><input type="checkbox" checked={status?.autoUpdate??true} disabled={!status||working||blocked||status.phase==="installing"} onChange={e=>void run(()=>api("set_auto_update",{enabled:e.target.checked}))}/><span><strong>自動アップデート</strong><small>起動後と12時間ごとに確認し、新版があればダウンロード・署名検証・適用・再起動まで自動で行います。</small></span></label>
+        <label className="update-toggle"><input type="checkbox" checked={status?.autoUpdate??true} disabled={!status||working||blocked||status.phase==="installing"} onChange={e=>void run(()=>api("set_auto_update",{enabled:e.target.checked}))}/><span className="update-toggle-mark" aria-hidden="true"/><span className="update-toggle-copy"><strong>自動アップデート</strong><small>起動後と12時間ごとに確認し、新版があればダウンロード・署名検証・適用・再起動まで自動で行います。</small></span></label>
         <p className="update-info"><Info size={18}/>設定の入力中はダウンロード後に待機します。設定を保存するか、閉じると更新を適用します。通知の転送は適用・再起動の間だけ停止します。</p>
         <div className="update-state" aria-live="polite"><CheckCheck size={20}/><div><strong>{status?labels[status.phase]:"更新情報を読み込み中…"}</strong>{status?.version&&<p>更新先: v{status.version}</p>}{status?.checkedAtMs&&<small>最終確認: {new Date(status.checkedAtMs).toLocaleString("ja-JP")}</small>}</div></div>
         {status?.phase==="downloading"&&<div className="update-progress"><progress max={100} value={percentage} aria-label="更新のダウンロード"/><span>{mb(status.downloaded)} MB{status.total?` / ${mb(status.total)} MB`:""}{percentage!==undefined&&`（${percentage}%）`}</span></div>}

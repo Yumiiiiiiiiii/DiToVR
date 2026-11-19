@@ -80,6 +80,8 @@ pub struct Status {
     overlay: bool,
     sound_only: bool,
     sound_ready: bool,
+    notification_sound: String,
+    volume_percent: f64,
     configured: bool,
     paused: bool,
     tray: bool,
@@ -433,6 +435,8 @@ impl AppState {
             sound_only: self.sound_only.load(Ordering::SeqCst),
             sound_ready: !controller.config.notification_sound.is_empty()
                 && controller.config.notification_volume > 0.0,
+            notification_sound: controller.config.notification_sound.clone(),
+            volume_percent: controller.config.notification_volume * 100.0,
             configured: controller.config.validate().is_ok(),
             paused: controller.paused,
             tray: self.tray_available(),
@@ -1059,6 +1063,30 @@ pub fn install_tray(app: &AppHandle, state: &AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn reading_audio_status_keeps_services_unpaused_and_does_not_expose_credentials() {
+        let state = AppState::new(PathBuf::new(), true, false, None, None, false);
+        {
+            let mut controller = state.controller.lock().await;
+            controller.config.notification_sound = "default".into();
+            controller.config.notification_volume = 0.37;
+            controller.config.client_secret = "never-expose-secret".into();
+            controller.config.access_token = "never-expose-access".into();
+            controller.config.refresh_token = "never-expose-refresh".into();
+            controller.config.bot_token = "never-expose-bot".into();
+        }
+        let status = state.status().await;
+        assert_eq!(status.notification_sound, "default");
+        assert_eq!(status.volume_percent, 37.0);
+        assert!(status.sound_ready);
+        assert!(!status.paused);
+        assert!(status.overlay);
+        assert!(!state.controller.lock().await.paused);
+        let public_status = serde_json::to_value(&status).unwrap();
+        assert_eq!(public_status["notificationSound"], "default");
+        assert_eq!(public_status["volumePercent"], 37.0);
+        assert!(!public_status.to_string().contains("never-expose"));
+    }
     #[tokio::test]
     async fn test_notifications_reject_missing_files_and_zero_volume_before_queueing() {
         let (sender, mut rx) =

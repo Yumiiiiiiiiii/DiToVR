@@ -3,7 +3,7 @@
 .debug-card { background:var(--surface); border:1px solid var(--border); border-radius:13px; margin-bottom:20px; }
 .debug-counts { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin:0; padding:22px 23px; }
 .debug-counts > div, .debug-test-counts > div { min-width:0; }
-.debug-counts dt { color:var(--muted); font-size:11px; margin-bottom:9px; }
+.debug-counts dt { color:var(--muted); font-size:11px; margin-bottom:9px; min-height:3.3em; }
 .debug-counts dd { font-size:26px; font-weight:600; margin:0; color:var(--text); font-variant-numeric:tabular-nums; }
 .debug-context { display:flex; flex-wrap:wrap; gap:12px 24px; padding:0 23px 18px; font-size:11px; color:var(--muted); }
 .debug-context strong { color:var(--text); font-weight:500; }
@@ -42,3 +42,4 @@
 .debug-source.simulation, .debug-source.overlay_test { background:var(--accent-soft); color:var(--accent); }
 .debug-event-drop > span:last-child { color:var(--error); }
 @media(max-width:920px){ .debug-test-fields{grid-template-columns:1fr;} .debug-overlay-test{flex-wrap:wrap;} .debug-overlay-test > button{margin-left:40px;} .debug-counts{gap:8px;} .debug-counts dt{font-size:10px;} .debug-counts dd{font-size:23px;} .debug-test-counts{grid-template-columns:repeat(2,minmax(0,1fr));} .debug-events li{gap:8px;grid-template-columns:65px 65px minmax(0,1fr);} }
+@media(max-width:600px){ .debug-counts{grid-template-columns:repeat(2,minmax(0,1fr));} }

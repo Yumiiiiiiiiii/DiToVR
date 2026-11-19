@@ -21,7 +21,7 @@ test("invalid Store identities and versions cannot create a package",()=>{
   assert.throws(()=>storeManifest({...identity,publisher:""},"0.2.1"));
 });
 
-test("Store staging includes audio licenses and only the allowed application files",()=>{
+test("Store staging includes audio and UI licenses and only the allowed application files",()=>{
   const directory=mkdtempSync(join(tmpdir(),"ditovr-store-audio-test-"));
   try {
     const exe=join(directory,"DiToVR.exe"), icons=join(directory,"icons"), stage=join(directory,"stage");
@@ -34,11 +34,13 @@ test("Store staging includes audio licenses and only the allowed application fil
     mkdirSync(icons);
     for (const file of ["StoreLogo.png","Square150x150Logo.png","Square44x44Logo.png"]) writeFileSync(join(icons,file),"test image");
     execFileSync(process.execPath,[fileURLToPath(new URL("./store-manifest.mjs",import.meta.url)),stage,exe,icons],{stdio:"pipe"});
-    assert.deepEqual(readdirSync(stage).sort(),["AppxManifest.xml","Assets","DiToVR.exe","LICENSE.txt","THIRD_PARTY_AUDIO_NOTICES.txt"].sort());
+    assert.deepEqual(readdirSync(stage).sort(),["AppxManifest.xml","Assets","DiToVR.exe","LICENSE.txt","THIRD_PARTY_AUDIO_NOTICES.txt","THIRD_PARTY_UI_NOTICES.txt"].sort());
     const root=fileURLToPath(new URL("../",import.meta.url));
     assert.equal(readFileSync(join(stage,"THIRD_PARTY_AUDIO_NOTICES.txt"),"utf8"),readFileSync(join(root,"THIRD_PARTY_AUDIO_NOTICES.txt"),"utf8"));
     const config=JSON.parse(readFileSync(join(root,"src-tauri/tauri.conf.json"),"utf8"));
     assert.equal(config.bundle.resources["../THIRD_PARTY_AUDIO_NOTICES.txt"],"THIRD_PARTY_AUDIO_NOTICES.txt");
+    assert.equal(readFileSync(join(stage,"THIRD_PARTY_UI_NOTICES.txt"),"utf8"),readFileSync(join(root,"THIRD_PARTY_UI_NOTICES.txt"),"utf8"));
+    assert.equal(config.bundle.resources["../THIRD_PARTY_UI_NOTICES.txt"],"THIRD_PARTY_UI_NOTICES.txt");
   } finally {
     assert.equal(dirname(directory),tmpdir());
     rmSync(directory,{recursive:true,force:true});

@@ -22,6 +22,8 @@ export interface Status {
   overlay: boolean;
   soundOnly: boolean;
   soundReady: boolean;
+  notificationSound: string;
+  volumePercent: number;
   configured: boolean;
   paused: boolean;
   tray: boolean;
@@ -99,6 +101,8 @@ const previewStatus: Status = {
   overlay: true,
   soundOnly: false,
   soundReady: false,
+  notificationSound: "",
+  volumePercent: 0,
   configured: true,
   paused: false,
   tray: true,
@@ -155,6 +159,10 @@ export async function api<T>(
   // Browser preview is isolated: it never accesses files, accounts or services.
   switch (command) {
     case "preview_theme": return undefined as T;
+    case "send_test":
+      if (previewStatus.paused) throw "設定を保存してからテストしてください。";
+      if (previewStatus.debugEnabled) throw "受信テスト中は通知を送信しません。";
+      return undefined as T;
     case "get_update_status": {
       return {currentVersion:version,storeManaged:false,autoUpdate:previewAutoUpdate,supported:false,canCheck:false,disabledReason:"画面プレビューでは更新の通信・適用を行いません。",phase:"idle",version:null,notes:null,downloaded:0,total:null,checkedAtMs:null,message:null} as T;
     }
@@ -184,6 +192,8 @@ export async function api<T>(
       previewStatus.soundOnly = false;
       return undefined as T;
     case "get_status":
+      previewStatus.notificationSound = previewSettings.notificationSound;
+      previewStatus.volumePercent = previewSettings.volumePercent;
       if (previewStatus.debugEnabled) previewStatus.overlay = false;
       previewStatus.whitelistOnly =
         previewStatus.receiveMode === "whitelist" ||

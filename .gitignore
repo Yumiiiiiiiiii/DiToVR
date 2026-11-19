@@ -37,3 +37,12 @@ Thumbs.db
 /docs/RPC_DISTRIBUTION_REVIEW.md
 /docs/WINDOWS_DEFENDER.md
 /store/LISTING.ja.md
+
+# Local agent handoff, design experiments and tooling (kept on disk, never pushed)
+/CLAUDE.md
+/HANDOFF.md
+/ARCHITECTURE.md
+/experiments/
+/ui-concepts/
+/.agents/
+/.better-design/

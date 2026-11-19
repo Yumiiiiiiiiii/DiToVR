@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
-    "build": "tsc --noEmit && vite build",
+    "build": "node scripts/ui-notices.mjs --check && tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 1420",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
@@ -14,8 +14,11 @@
     "desktop:build:store": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-store.ps1"
   },
   "dependencies": {
+    "@animate-ui/react": "2.4.2",
+    "@base-ui/react": "1.9.0",
     "@tauri-apps/api": "^2.0.0",
     "lucide-react": "^0.468.0",
+    "motion": "14.9.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

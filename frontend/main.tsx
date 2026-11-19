@@ -1,20 +1,24 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { AnimateUIProvider } from "@animate-ui/react/provider";
+import { Button } from "@animate-ui/react/primitives/buttons/button";
+import { Fade } from "@animate-ui/react/primitives/effects/fade";
+import { Highlight } from "@animate-ui/react/primitives/effects/highlight";
+import { ReducedMotionConfig, spring, transition, useShouldReduceMotion, useTempoTransition } from "@animate-ui/react/utils/motion";
+import { startVisiblePolling } from "./visible-poll";
+import { ConnectionStrip } from "./notification-home";
+import { NotificationWorkspace } from "./notification-workspace";
+import { HealthPanel } from "./health";
+import { LeaveDialog } from "./leave-dialog";
 import { createRoot } from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";
 import {
-  ArrowRight,
   Activity,
   Download,
   Bell,
-  BellRing,
   Check,
-  CheckCheck,
-  ChevronRight,
   CircleHelp,
   ExternalLink,
   FolderOpen,
-  Gamepad2,
-  Home,
   Info,
   LockKeyhole,
   ListFilter,
@@ -26,7 +30,6 @@ import {
   Settings2,
   Shield,
   ShieldCheck,
-  Sparkles,
   Volume2,
   X,
 } from "lucide-react";
@@ -42,12 +45,13 @@ import {
   type ThemePreference,
 } from "./bridge";
 import "./styles.css";
+import "./workspace.css";
 import { Onboarding } from "./onboarding";
 import { NotificationModeChoices } from "./notification-mode";
 import { DiagnosticsPanel } from "./diagnostics";
 import { UpdatesPanel, UpdateNotice, useUpdateStatus } from "./updates";
 
-type Page = "home" | "settings" | "tutorial" | "debug" | "updates";
+type Page = "home" | "settings" | "tutorial" | "debug" | "updates" | "health";
 type Tab = "display" | "sound" | "discord" | "whitelist";
 type Form = Settings & {
   clientSecret: string;
@@ -62,6 +66,8 @@ const emptyStatus: Status = {
   overlay: false,
   soundOnly: false,
   soundReady: false,
+  notificationSound: "",
+  volumePercent: 0,
   configured: false,
   paused: false,
   tray: false,
@@ -78,48 +84,25 @@ const emptyStatus: Status = {
   debugEnabled: false,
 };
 const tabs: { id: Tab; label: string; icon: typeof Monitor }[] = [
-  { id: "display", label: "通知の表示", icon: Monitor },
+  { id: "display", label: "表示・テーマ", icon: Monitor },
   { id: "sound", label: "通知音・動作", icon: Volume2 },
   { id: "discord", label: "Discord接続", icon: MessageCircle },
   { id: "whitelist", label: "許可リスト", icon: ListFilter },
 ];
-const receiveChoices: { mode: ReceiveMode; label: string; help: string }[] = [
-  {
-    mode: "normal",
-    label: "Discord通知に従う",
-    help: "通常どおり通知イベントを転送",
-  },
-  {
-    mode: "whitelist",
-    label: "許可リストだけ",
-    help: "登録したチャンネル・DMだけ受信",
-  },
-  {
-    mode: "auto",
-    label: "Botで自動判別",
-    help: "取り込み中は許可リストだけ受信",
-  },
-];
-const botLabels = {
-  disabled: "監視停止中",
-  connecting: "Bot接続中",
-  unknown: "判定待ち",
-  dnd: "取り込み中",
-  online: "オンライン",
-  idle: "退席中",
-  offline: "オフライン・判定保留",
-  error: "Token・Presence Intentを確認",
-  missing_guild: "指定サーバーにBotがいません",
-  missing_user: "指定サーバーに自分がいません",
-  account_mismatch: "RPCのアカウントとユーザーIDが違います",
-};
 
 function App() {
+  const reveal = useTempoTransition(transition.reveal);
+  const selection = useShouldReduceMotion() ? transition.instant : spring.selection;
   const [page, setPage] = useState<Page>("home");
   const [tab, setTab] = useState<Tab>("display");
   const [status, setStatus] = useState<Status>(emptyStatus);
-  const updateStatus=useUpdateStatus(!status.storeManaged);
+  const {status:updateStatus,error:updateError}=useUpdateStatus(!status.storeManaged);
   const [form, setForm] = useState<Form | null>(null);
+  const draftRef = useRef<Form | null>(null);
+  draftRef.current = form;
+  const [pendingPage, setPendingPage] = useState<Page | null>(null);
+  const [statusError, setStatusError] = useState(false);
+  const [lastStatusAt, setLastStatusAt] = useState<number | null>(null);
   const theme = form?.theme ?? status.theme;
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -140,17 +123,24 @@ function App() {
     message: string;
   } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    document.querySelector(".main-content")?.scrollTo({top: 0});
+  }, [page, tab]);
   const ready = status.discord === 2 && (status.debugEnabled || status.overlay) && !status.paused;
   const refresh = useCallback(async () => {
     try {
       setStatus(await api<Status>("get_status"));
+      setStatusError(false);
+      setLastStatusAt(Date.now());
     } catch (e) {
-      setToast({ message: errorMessage(e), error: true });
+      setStatusError(true);
     }
   }, []);
   const notify = (message: string, error = false) =>
     setToast({ message, error });
   const settings = useCallback(async (section: Tab = "display") => {
+    if (draftRef.current) { setTab(section); setPage("settings"); return true; }
     setBusy(true);
     setFormError(null);
     setChannelInput("");
@@ -167,12 +157,17 @@ function App() {
       });
       setTab(section);
       setPage("settings");
+      return true;
     } catch (e) {
       setToast({ message: errorMessage(e), error: true });
+      return false;
     } finally {
       setBusy(false);
     }
   }, []);
+  async function editAudio() {
+    if (await settings("sound")) setPage("home");
+  }
   const tutorial = useCallback(async (resumeConnection = false) => {
     setBusy(true);
     try {
@@ -189,68 +184,78 @@ function App() {
   async function openDebug() {
     setBusy(true);
     try {
-      if (page === "settings" || page === "tutorial") await api("cancel_settings");
+      if (form || page === "tutorial") await api("cancel_settings");
       setForm(null); setTutorialSettings(null); setPage("debug");
     } catch(e) {notify(errorMessage(e), true);}
     finally {setBusy(false);await refresh();}
   }
   async function openUpdates() {
-    if (status.storeManaged) return;
     setBusy(true);
     try {
-      if(page==="settings"||page==="tutorial")await api("cancel_settings");
+      if(form||page==="tutorial")await api("cancel_settings");
       setForm(null);setTutorialSettings(null);setPage("updates");
     }catch(e){notify(errorMessage(e),true);}
     finally{setBusy(false);await refresh();}
   }
+  async function navigate(next: Page) {
+    if (next === page) return;
+    if (form || page === "tutorial") { setPendingPage(next); return; }
+    await go(next);
+  }
+  async function go(next: Page) {
+    setPendingPage(null);
+    if (next === "tutorial") { await tutorial(); return; }
+    if (next === "updates") { await openUpdates(); return; }
+    if (next === "debug") { await openDebug(); return; }
+    setBusy(true);
+    try {
+      if (form || page === "tutorial") await api("cancel_settings");
+      setForm(null); setTutorialSettings(null); setPage(next);
+    } catch (error) { notify(errorMessage(error), true); }
+    finally { setBusy(false); await refresh(); }
+  }
   useEffect(() => {
     let active = true;
-    api<Status>("get_status")
-      .then((value) => {
-        if (active) {
-          setStatus(value);
-          if (value.startSettings)
-            void settings(value.configured ? "display" : "discord");
-          else if (value.debugEnabled) setPage("debug");
-          else if (value.onboardingPending) void tutorial(value.configured);
-          else if (!value.configured) void settings("discord");
-        }
-      })
-      .catch(
-        (e) => active && setToast({ message: errorMessage(e), error: true }),
-      );
-    const timer = setInterval(() => {
-      if (active) void refresh();
-    }, 1000);
-    const subscriptions = desktop
-      ? [
-          listen("navigate-settings", () => void settings()),
-          listen("navigate-home", () => {
-            setForm(null);
-            setTutorialSettings(null);
-            setPage("home");
-            void refresh();
-          }),
-          listen<string>("operation-error", (event) =>
-            notify(event.payload, true),
-          ),
-          listen<{ Ok?: string; Err?: string }>("operation-result", (event) =>
-            notify(
-              event.payload.Ok ?? event.payload.Err ?? "",
-              Boolean(event.payload.Err),
-            ),
-          ),
-        ]
-      : [];
-    return () => {
-      active = false;
-      clearInterval(timer);
-      subscriptions.forEach((p) => void p.then((unlisten) => unlisten()));
-    };
+    let first = true;
+    const stop = startVisiblePolling(async () => {
+      const value = await api<Status>("get_status");
+      if (!active) return;
+      setStatus(value); setStatusError(false); setLastStatusAt(Date.now());
+      if (first) {
+        first = false;
+        if (value.startSettings) void settings(value.configured ? "display" : "discord");
+        else if (value.debugEnabled) setPage("debug");
+        else if (value.onboardingPending) void tutorial(value.configured);
+        else if (!value.configured) void settings("discord");
+      }
+    }, {onError: () => { if (active) setStatusError(true); }});
+    const subscriptions = desktop ? [
+      listen("navigate-settings", () => void settings()),
+      listen("navigate-home", () => {
+        setPendingPage(null); setForm(null); setTutorialSettings(null); setPage("home"); void refresh();
+      }),
+      listen<string>("operation-error", event => notify(event.payload, true)),
+      listen<{Ok?: string; Err?: string}>("operation-result", event => notify(event.payload.Ok ?? event.payload.Err ?? "", Boolean(event.payload.Err))),
+    ] : [];
+    return () => { active = false; stop(); subscriptions.forEach(p => void p.then(unlisten => unlisten())); };
   }, [refresh, settings, tutorial]);
   useEffect(() => {
+    const closeMenu = (event: PointerEvent) => {
+      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) menuRef.current?.removeAttribute("open");
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, []);
+  useEffect(() => {
     const hide = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || busy || !desktop) return;
+      if (event.key !== "Escape" || event.defaultPrevented || pendingPage) return;
+      if (menuRef.current?.open) {
+        event.preventDefault();
+        menuRef.current.removeAttribute("open");
+        menuRef.current.querySelector("summary")?.focus();
+        return;
+      }
+      if (busy || !desktop) return;
       event.preventDefault();
       void api("hide_to_tray").catch((error) =>
         setToast({ message: errorMessage(error), error: true }),
@@ -258,7 +263,7 @@ function App() {
     };
     window.addEventListener("keydown", hide);
     return () => window.removeEventListener("keydown", hide);
-  }, [busy]);
+  }, [busy, pendingPage]);
   useEffect(() => {
     if (!toast || toast.error) return;
     const timer = setTimeout(() => setToast(null), 5000);
@@ -266,8 +271,10 @@ function App() {
   }, [toast]);
   async function mode(soundOnly: boolean) {
     if (soundOnly && !status.soundReady) {
-      await settings("sound");
-      setForm(previous => previous ? { ...previous, soundOnly: true } : previous);
+      if (await settings("sound")) {
+        setForm(previous => previous ? { ...previous, soundOnly: true } : previous);
+        setPage("home");
+      }
       return;
     }
     setBusy(true);
@@ -338,6 +345,7 @@ function App() {
           ? String(error.field ?? "")
           : "";
       setFormError({ field, message: errorMessage(error) });
+      if (page === "home" && field && !["volumePercent", "notificationSound", "soundOnly"].includes(field)) setPage("settings");
       if (["clientId", "clientSecret", "redirectUri"].includes(field))
         setTab("discord");
       else if (
@@ -349,13 +357,13 @@ function App() {
       else if (["volumePercent", "notificationSound", "soundOnly"].includes(field))
         setTab("sound");
       else if (field) setTab("display");
-      setTimeout(
-        () =>
-          formRef.current
-            ?.querySelector<HTMLInputElement>(`[name="${field}"]`)
-            ?.focus(),
-        0,
-      );
+      setTimeout(() => {
+        const input = field === "soundOnly" && page === "home"
+          ? document.querySelector<HTMLInputElement>('input[name="notification-mode"]:checked')
+          : formRef.current?.querySelector<HTMLInputElement>(`[name="${field}"]`);
+        input?.closest("details")?.setAttribute("open", "");
+        input?.focus();
+      }, 0);
     } finally {
       setBusy(false);
       await refresh();
@@ -426,439 +434,72 @@ function App() {
     );
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">
-            <Gamepad2 size={25} strokeWidth={1.8} />
-          </span>
-          <div>
-            <strong>
-              DiToVR
-            </strong>
-            <small>通知をつなぐ、小さな窓。</small>
-          </div>
-        </div>
-        <div className="nav-label">ワークスペース</div>
-        <nav aria-label="メイン">
-          <button
-            className={page === "home" ? "active" : ""}
-            onClick={() => (page !== "home" ? void cancel() : undefined)}
-            disabled={busy}
-          >
-            <Home size={18} />
-            ホーム{page === "home" && <span className="nav-dot" />}
-          </button>
-          {status.debugEnabled && <button className={page==="debug"?"active":""} disabled={busy||page==="debug"} onClick={()=>void openDebug()}><Activity size={18}/>受信診断{page==="debug"&&<span className="nav-dot"/>}</button>}
-          <button className={page === "tutorial" ? "active" : ""} disabled={busy || page === "tutorial"} onClick={() => void tutorial()}>
-            <CircleHelp size={18} />
-            使い方ガイド{page === "tutorial" && <span className="nav-dot" />}
-          </button>
-          <button
-            className={page === "settings" ? "active" : ""}
-            onClick={() =>
-              void settings(status.configured ? "display" : "discord")
-            }
-            disabled={busy || page === "settings"}
-          >
-            <Settings2 size={18} />
-            設定{page === "settings" && <span className="nav-dot" />}
-          </button>
-          {!status.storeManaged&&<button className={page==="updates"?"active":""} disabled={busy||page==="updates"} onClick={()=>void openUpdates()}><Download size={18}/>アプリの更新</button>}
+    <div className="app-shell workspace-layout">
+      <header className="workspace-header">
+        <div className="workspace-brand"><span className="workspace-brand-mark">VR</span><strong>DiToVR</strong><small>{status.currentVersion ? "v"+status.currentVersion : ""}</small></div>
+        <nav className="workspace-navigation" aria-label="メイン">
+          <Highlight value={page==="settings"?(tab==="discord"||tab==="whitelist"?"connection":"behavior"):page==="home"||page==="health"?page:null} click={false} transition={selection} exitDelay={0} className="workspace-nav-indicator">
+            <Button data-value="home" hoverScale={1} tapScale={0.98} aria-current={page==="home"?"page":undefined} className={page==="home"?"active":""} disabled={busy} onClick={()=>void navigate("home")}><Bell size={17}/>通知</Button>
+            <Button data-value="connection" hoverScale={1} tapScale={0.98} aria-current={page==="settings"&&(tab==="discord"||tab==="whitelist")?"page":undefined} className={page==="settings"&&(tab==="discord"||tab==="whitelist")?"active":""} disabled={busy||page==="tutorial"} onClick={()=>void settings("discord")}><MessageCircle size={17}/>接続</Button>
+            <Button data-value="behavior" hoverScale={1} tapScale={0.98} aria-current={page==="settings"&&(tab==="sound"||tab==="display")?"page":undefined} className={page==="settings"&&(tab==="sound"||tab==="display")?"active":""} disabled={busy||page==="tutorial"} onClick={()=>void settings("sound")}><Settings2 size={17}/>動作設定</Button>
+            <Button data-value="health" hoverScale={1} tapScale={0.98} aria-current={page==="health"?"page":undefined} className={page==="health"?"active":""} disabled={busy} onClick={()=>void navigate("health")}><Activity size={17}/>診断</Button>
+          </Highlight>
         </nav>
-        <div className="sidebar-bottom">
-          <div className="mode-indicator">
-            {status.soundOnly ? <Volume2 size={19} /> : <MessageCircle size={19} />}
-            <div>
-              <span>現在の通知モード</span>
-              <strong>{status.soundOnly ? "通知音のみ" : "通常表示"}</strong>
-            </div>
-          </div>
-          <div className="local-note">
-            <LockKeyhole size={13} />
-            認証情報はこの PC で保護
-          </div>
-          <button
-            className="quit-button"
-            onClick={() => void action("exit_app")}
-            disabled={busy}
-          >
-            <Power size={15} />
-            アプリを終了
-          </button>
-          <small className="version">
-            DiToVR <span>{status.currentVersion?`v${status.currentVersion}`:"読み込み中"}</span>
-          </small>
+        <div className="workspace-tools">
+          <button className="workspace-theme" aria-label="テーマと表示の設定" title="テーマと表示の設定" disabled={busy||page==="tutorial"} onClick={()=>void settings("display")}><Monitor size={18}/></button>
+          <details ref={menuRef} className="workspace-menu" onClick={event=>{if(event.target instanceof Element&&event.target.closest("button"))menuRef.current?.removeAttribute("open");}}><summary aria-label="その他の操作" title="その他の操作"><CircleHelp size={18}/></summary><div>
+            <button disabled={busy} onClick={()=>void navigate("tutorial")}><CircleHelp size={16}/>セットアップ</button>
+            <button disabled={busy} onClick={()=>void navigate("updates")}><Download size={16}/>アプリの更新</button>
+            {status.debugEnabled&&<button disabled={busy} onClick={()=>void navigate("debug")}><Radio size={16}/>受信テスト</button>}
+            <button disabled={busy} onClick={()=>void action("exit_app")}><Power size={16}/>アプリを終了</button>
+            <p><LockKeyhole size={12}/>認証情報はこのPCで保護</p>
+          </div></details>
         </div>
-      </aside>
+      </header>
       <div className="workspace">
         <header className="topbar">
-          <div className="breadcrumb">
-            DiToVR <ChevronRight size={13} />
-            <span>{page === "home" ? "ホーム" : page === "tutorial" ? "使い方ガイド" : page === "debug" ? "受信診断" : page === "updates" ? "アプリの更新" : "設定"}</span>
-          </div>
-          <span className={`connection-pill ${ready ? "connected" : ""}`}>
-            <i />
-            {status.paused
-              ? "設定中 · 転送を一時停止"
-              : ready
-                ? status.debugEnabled ? "Discord 受信テスト中" : "接続済み"
-                : "接続待ち"}
-          </span>
+          <ConnectionStrip status={status}/>
+          <span className={ready&&!statusError?"connection-pill connected":"connection-pill"}><i/>{statusError?"状態を取得できません":status.paused?"設定中 · 転送を一時停止":ready?status.debugEnabled?"Discord受信テスト中":"接続済み":"接続待ち"}</span>
         </header>
         <main className="main-content">
-          {!status.storeManaged&&page!=="updates"&&<UpdateNotice status={updateStatus} onOpen={()=>void openUpdates()}/>}
+          {updateError && <div className="error-banner" role="alert"><Info size={17}/>更新状態を取得できませんでした。画面を表示中は自動で再試行します。</div>}
+          {!status.storeManaged&&page!=="updates"&&<UpdateNotice status={updateStatus} onOpen={()=>void navigate("updates")}/>}
           {status.preview && (
             <div className="preview-banner">
               <Info size={15} />
-              画面プレビュー · Discord
-              への接続、通知の送信、設定ファイルの保存は行いません。
+              画面プレビュー · 接続状態はモックです。実接続・通知送信・設定保存は行いません。
             </div>
           )}
+          {statusError && <div className="error-banner" role="alert"><Info size={17}/><span>状態の取得に失敗しました。{lastStatusAt ? `最終取得: ${new Date(lastStatusAt).toLocaleTimeString("ja-JP")}` : "接続状態は未確認です。"} 画面を表示中は自動で再試行します。</span><Button hoverScale={1} tapScale={0.98} className="secondary" onClick={()=>void refresh()}>再試行</Button></div>}
           {status.problem && (
             <div className="error-banner" role="alert">
               <CircleHelp size={18} />
               {status.problem}
             </div>
           )}
-          {page === "updates" && !status.storeManaged ? <UpdatesPanel status={updateStatus}/> : page === "debug" && status.debugEnabled ? (
-            <DiagnosticsPanel status={status} onSetup={()=>void (status.configured?settings("discord"):tutorial())} onWhitelist={()=>void settings("whitelist")}/>
+          <Fade key={page} className="workspace-page" initialOpacity={0.75} transition={reveal}>
+          {page === "updates" ? status.storeManaged ? <div className="store-updates"><div className="page-heading"><div><h1>アプリの更新</h1><p>Microsoft Store が更新を管理します。</p></div></div><div className="health-detail"><Download size={28}/><h2>Microsoft Store 版</h2><p>現在のバージョン: v{status.currentVersion || "読み込み中"}</p><p>Microsoft Store のライブラリで更新を確認してください。</p></div></div> : <UpdatesPanel status={updateStatus}/> : page === "health" ? <HealthPanel status={status} busy={busy} onSetup={()=>void settings("discord")} onDebug={()=>void navigate("debug")}/> : page === "debug" && status.debugEnabled ? (
+            <DiagnosticsPanel status={status} onSetup={()=>void (status.configured?settings("discord"):tutorial())}/>
           ) : page === "tutorial" && tutorialSettings ? (
             <Onboarding initial={tutorialSettings} status={status} busy={busy} resumeConnection={tutorialResume} onSave={saveTutorial} onEdit={() => api<Settings>("get_settings")} onFinish={finishTutorial} onLater={cancel} />
           ) : page === "home" ? (
-            <>
-              <div className="page-heading">
-                <div>
-                  <div className="eyebrow">YOUR NOTIFICATIONS, IN VR</div>
-                  <h1>通知を、VR の中へ。</h1>
-                  <p>いつものメッセージを、もっと自然に受け取ろう。</p>
-                </div>
-                <span className="heading-icon">
-                  <BellRing size={27} strokeWidth={1.5} />
-                </span>
-              </div>
-              {(!status.configured || status.onboardingPending) && (
-                <div className="setup-prompt">
-                  <div>
-                    <strong>{status.configured ? "初回の案内を続けましょう" : "最初の接続設定をしましょう"}</strong>
-                    <p>
-                      {status.onboardingPending ? "準備から接続確認まで、順番にご案内します。" : "自分の Discord アプリの Client ID を使って接続します。"}
-                    </p>
-                  </div>
-                  <button
-                    className="primary"
-                    onClick={() => void (status.onboardingPending ? tutorial(status.configured) : settings("discord"))}
-                  >
-                    {status.onboardingPending ? "案内を再開" : "接続を設定"}
-                    <ArrowRight size={15} />
-                  </button>
-                </div>
-              )}
-              <div className="connection-grid">
-                <article className="connection-card">
-                  <div className="connection-card-top">
-                    <span className="app-icon discord-icon">
-                      <MessageCircle size={23} />
-                    </span>
-                    <span
-                      className={`status-label ${status.discord === 2 && !status.paused ? "good" : ""}`}
-                    >
-                      <i />
-                      {status.paused
-                        ? "一時停止"
-                        : ([
-                            "起動待ち",
-                            "認証中",
-                            "接続済み",
-                            "再接続中",
-                            "確認が必要",
-                          ][status.discord] ?? "接続待ち")}
-                    </span>
-                  </div>
-                  <h2>Discord</h2>
-                  <p>
-                    {status.paused
-                      ? "設定を閉じると受信を再開します。"
-                      : status.discord === 2
-                        ? "デスクトップアプリの通知を受信できます。"
-                        : status.discord === 4
-                          ? "認証情報または承認状態を確認してください。"
-                          : status.discord === 1
-                            ? "Discord に表示された承認画面を確認してください。"
-                            : "Discord デスクトップアプリを起動してください。"}
-                  </p>
-                  <div className="connection-meta">
-                    <span>
-                      <Monitor size={12} />
-                      デスクトップアプリ
-                    </span>
-                    {status.discord === 4 && (
-                      <button onClick={() => void settings("discord")}>
-                        設定を確認
-                        <ChevronRight size={12} />
-                      </button>
-                    )}
-                  </div>
-                </article>
-                <article className="connection-card">
-                  <div className="connection-card-top">
-                    <span className="app-icon overlay-icon">
-                      <Gamepad2 size={24} />
-                    </span>
-                    <span
-                      className={`status-label ${status.overlay && !status.paused ? "good" : ""}`}
-                    >
-                      <i />
-                      {status.debugEnabled
-                        ? "受信テストでは停止"
-                        : status.paused
-                        ? "一時停止"
-                        : status.overlay
-                          ? "接続済み"
-                          : "接続待ち"}
-                    </span>
-                  </div>
-                  <h2>XSOverlay</h2>
-                  <p>
-                    {status.debugEnabled
-                      ? "-debug 起動では XSOverlay を使わず Discord の受信だけを確認します。"
-                      : status.paused
-                      ? "設定を閉じると送信を再開します。"
-                      : status.overlay
-                        ? "VR 内へ通知を届ける準備ができています。"
-                        : "XSOverlay を起動し、通知用 WebSocket を有効にしてください。"}
-                  </p>
-                  <div className="connection-meta">
-                    <span>
-                      <Radio size={12} />
-                      VR の通知表示
-                    </span>
-                    <span>
-                      {status.debugEnabled ? "VR へは送信しません" : status.overlay ? "準備完了" : "接続を待っています"}
-                    </span>
-                  </div>
-                </article>
-              </div>
-              <section className="settings-card receive-card">
-                <div className="section-heading">
-                  <div>
-                    <h2>通知の受信</h2>
-                    <p>取り込み中も、必要な会話だけを受け取れます。</p>
-                  </div>
-                  <button
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => void settings("whitelist")}
-                  >
-                    <ListFilter size={15} />
-                    許可リストを設定
-                  </button>
-                </div>
-                <div className="receive-options">
-                  {receiveChoices.map((choice) => (
-                    <button
-                      key={choice.mode}
-                      className={`receive-option ${status.receiveMode === choice.mode ? "selected" : ""}`}
-                      aria-pressed={status.receiveMode === choice.mode}
-                      disabled={
-                        busy ||
-                        !status.configured ||
-                        (choice.mode === "auto" && !status.botConfigured)
-                      }
-                      onClick={() => void receiveMode(choice.mode)}
-                    >
-                      <span>
-                        <strong>{choice.label}</strong>
-                        <small>{choice.help}</small>
-                      </span>
-                      <span className="radio-check">
-                        {status.receiveMode === choice.mode && (
-                          <Check size={12} />
-                        )}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <div className="receive-summary">
-                  <ShieldCheck size={16} />
-                  <span>
-                    {status.whitelistOnly
-                      ? `受信対象: 許可リスト ${status.whitelistCount} 件だけ`
-                      : "受信対象: Discord が通知した会話"}
-                    {status.receiveMode === "auto" &&
-                      ` · ${botLabels[status.botStatus]}`}
-                  </span>
-                </div>
-                {status.receiveMode === "auto" &&
-                  status.whitelistOnly &&
-                  status.botStatus !== "dnd" && (
-                    <p className="receive-help">
-                      判定できるまで許可リストだけを流します。Bot
-                      と自分が同じサーバーにいること、Presence Intent
-                      を確認してください。
-                    </p>
-                  )}
-                {status.whitelistCount > 0 && status.whitelistStatus !== 2 && (
-                  <p className="receive-help">
-                    {status.whitelistStatus === 3
-                      ? "許可リストの一部を購読できませんでした。ID・閲覧権限・messages.read の承認を確認してください。"
-                      : "許可リストの購読待ちです。Discord の承認画面でメッセージ読み取りを許可してください。"}
-                  </p>
-                )}
-                {status.preview && status.receiveMode === "auto" && (
-                  <div className="preview-presence">
-                    <span>判定の体験（ダミー）</span>
-                    {[
-                      { status: "dnd", label: "取り込み中" },
-                      { status: "online", label: "オンライン" },
-                      { status: "offline", label: "オフライン" },
-                    ].map((sample) => (
-                      <button
-                        key={sample.status}
-                        className="secondary"
-                        onClick={async () => {
-                          await api("preview_set_presence", {
-                            status: sample.status,
-                          });
-                          await refresh();
-                        }}
-                      >
-                        {sample.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </section>
-              <section className="display-card">
-                <div className="section-heading">
-                  <div>
-                    <h2>通知モード</h2>
-                    <p>選んだモードは、次の起動でも引き継がれます。</p>
-                  </div>
-                  <span className="subtle-tag">
-                    <CheckCheck size={13} />
-                    自動保存
-                  </span>
-                </div>
-                <div className="display-body">
-                  <div>
-                    <NotificationModeChoices name="home-mode" value={status.soundOnly} onChange={value => void mode(value)} disabled={busy || !status.configured} />
-                    <div className="mode-hint">
-                      <Volume2 size={14} />
-                      <span>
-                        {status.soundReady ? "保存した通知音と音量を使います。" : "通知音のみを選ぶと、音と音量の設定が開きます。"}
-                        {" "}<button className="tutorial-text-button" disabled={busy} onClick={() => void settings("sound")}>通知音を設定</button>
-                      </span>
-                    </div>
-                  </div>
-                  <div className="notification-stage">
-                    <div className="stage-label">
-                      <Sparkles size={12} />
-                      通知のイメージ<span>サンプル</span>
-                    </div>
-                    {status.soundOnly ? <div className="audio-only-preview"><Volume2 size={32} /><strong>通知音のみ</strong><p>VR に通知は表示されません。<br />保存した通知音が鳴ります。</p></div> : <div className="notification-sample">
-                      <div className="sample-top">
-                        <span>
-                          <MessageCircle size={12} />
-                          Discord
-                        </span>
-                        <small>たった今</small>
-                      </div>
-                      <div className="sample-message">
-                        <div className="sample-avatar">S</div>
-                        <div>
-                          <strong>
-                            サンプルさん
-                          </strong>
-                          <p className="sample-context">サンプルサーバー / #general</p>
-                          <p>
-                            こんにちは！ VR の中でも届きます。
-                          </p>
-                        </div>
-                      </div>
-                    </div>}
-                    <div className="stage-caption">
-                      {status.soundOnly
-                        ? "ここでは音は鳴りません。下のテスト通知で確認できます"
-                        : "VR に表示される通知のイメージです"}
-                    </div>
-                  </div>
-                </div>
-                <div className="display-caution">
-                  <Info size={14} />
-                  通知音のみでも XSOverlay への接続が必要です。すでに表示された通知は消えません。
-                </div>
-              </section>
-              <div className="test-card">
-                <span className="test-icon">
-                  <Bell size={21} />
-                </span>
-                <div>
-                  <h3>{status.soundOnly ? "通知音を確認" : "VR 内の表示と通知音を確認"}</h3>
-                  <p>
-                    {status.debugEnabled
-                      ? "VR の表示テストは、-debug を付けずに起動してください。"
-                      : status.overlay
-                      ? "会話を含まないテスト通知を送れます。"
-                      : "XSOverlay に接続すると、テスト通知を送れます。"}
-                  </p>
-                </div>
-                <button
-                  className="primary"
-                  disabled={status.debugEnabled || !status.overlay || status.paused || busy}
-                  onClick={() =>
-                    void action(
-                      "send_test",
-                      status.soundOnly ? "送信待ちに追加しました。通知音を確認してください。" : "送信待ちに追加しました。VR 内の表示と通知音を確認してください。",
-                    )
-                  }
-                >
-                  <Bell size={15} />
-                  テスト通知を送る
-                  <ArrowRight size={15} />
-                </button>
-              </div>
-              <div className="workspace-note">
-                <Info size={14} />
-                {status.tray
-                  ? "×でトレイに収納。通知の転送はそのまま続きます。"
-                  : "トレイを利用できません。画面を開いたまま使用してください。"}
-              </div>
-            </>
+            <NotificationWorkspace status={status} busy={busy} draft={form} formRef={formRef} error={formError?.message ?? null}
+              settings={section=>void settings(section)} mode={value=>form?change("soundOnly",value):void mode(value)} receiveMode={value=>void receiveMode(value)}
+              setup={()=>void tutorial(status.configured)} edit={()=>void editAudio()} change={(key,value)=>key==="volumePercent"?change(key,Number(value)):change(key,String(value))}
+              browse={()=>{void api<string|null>("browse_sound").then(path=>{if(path)change("notificationSound",path);}).catch(error=>notify(errorMessage(error),true));}}
+              save={event=>void save(event)} cancel={()=>void cancel()}
+              test={()=>void action("send_test", status.preview ? "デモの通知テストを実行しました。実際の通知・音声は送信していません。" : "送信待ちに追加しました。XSOverlay 側で届き方を確認してください。")}/>
           ) : (
             <>
               <div className="page-heading settings-heading">
                 <div>
-                  <div className="eyebrow">MAKE IT YOURS</div>
-                  <h1>{status.configured ? "設定" : "はじめの接続設定"}</h1>
-                  <p>通知の見え方と、Discord への接続を整えます。</p>
+                  <span className="page-kicker">あなたに合う、受け取り方へ</span>
+                  <h1>{status.configured ? tabs.find(item=>item.id===tab)?.label : "はじめの接続設定"}</h1>
+                  <p>設定中は転送を一時停止します。保存すると再開します。</p>
                 </div>
                 <span className="heading-icon">
                   <Settings2 size={27} strokeWidth={1.5} />
                 </span>
-              </div>
-              <div
-                className="settings-tabs"
-                role="tablist"
-                aria-label="設定の項目"
-              >
-                {tabs.map((item) => (
-                  <button
-                    key={item.id}
-                    role="tab"
-                    aria-selected={tab === item.id}
-                    aria-controls={`panel-${item.id}`}
-                    id={`tab-${item.id}`}
-                    className={tab === item.id ? "selected" : ""}
-                    onClick={() => {
-                      setTab(item.id);
-                      setFormError(null);
-                    }}
-                  >
-                    <item.icon size={16} />
-                    {item.label}
-                  </button>
-                ))}
               </div>
               <form
                 ref={formRef}
@@ -866,15 +507,16 @@ function App() {
                 noValidate
                 className="settings-form"
               >
+                <nav className="settings-tabs" aria-label="設定の項目"><Highlight value={tab} click={false} transition={selection} exitDelay={0} className="settings-tab-indicator">{tabs.map(item=><Button key={item.id} data-value={item.id} type="button" hoverScale={1} tapScale={0.98} aria-current={tab===item.id?"page":undefined} className={tab===item.id?"active":""} disabled={busy} onClick={()=>setTab(item.id)}><item.icon size={16}/>{item.label}</Button>)}</Highlight></nav>
                 {!form ? (
                   <div className="loading-card">設定を読み込んでいます…</div>
                 ) : (
-                  <>
+                  <Fade key={tab} initialOpacity={0.75} transition={reveal}>
                     <section
                       className="settings-card"
-                      role="tabpanel"
+                      role="region"
                       id="panel-whitelist"
-                      aria-labelledby="tab-whitelist"
+                      aria-label="許可リスト"
                       hidden={tab !== "whitelist"}
                     >
                       <div className="section-heading">
@@ -939,7 +581,7 @@ function App() {
                               }
                             }}
                           />
-                          <button
+                          <Button hoverScale={1} tapScale={0.98}
                             id="add-channel"
                             type="button"
                             className="secondary"
@@ -973,7 +615,7 @@ function App() {
                           >
                             <Plus size={15} />
                             追加
-                          </button>
+                          </Button>
                         </div>
                         {channelError && (
                           <p className="whitelist-error" role="alert">
@@ -993,7 +635,7 @@ function App() {
                               <li key={id}>
                                 <MessageCircle size={16} />
                                 <code>{id}</code>
-                                <button
+                                <Button hoverScale={1} tapScale={0.98}
                                   type="button"
                                   className="secondary"
                                   aria-label={`${id} を削除`}
@@ -1008,26 +650,26 @@ function App() {
                                 >
                                   <X size={14} />
                                   削除
-                                </button>
+                                </Button>
                               </li>
                             ))}
                           </ul>
                         )}
                       </div>
                     </section>
-                    <section
+                    <details
                       className="settings-card bot-settings"
-                      role="region"
+                      open={form.receiveMode === "auto" || formError?.field?.startsWith("bot") ? true : undefined}
                       id="panel-bot"
                       aria-labelledby="bot-heading"
                       hidden={tab !== "whitelist"}
                     >
+                      <summary>Botで自動判別を使う（任意）</summary>
                       <div className="section-heading">
                         <div>
                           <h2 id="bot-heading">Bot による取り込み中の自動判別</h2>
                           <p>
-                            Bot はステータスだけを監視します。メッセージの受信は
-                            RPC です。
+                            Botは状態監視専用です。会話はDiscordデスクトップから受信します。
                           </p>
                         </div>
                         <ShieldCheck size={21} />
@@ -1086,7 +728,7 @@ function App() {
                               }
                             />
                             <small>
-                              RPC でログインしている自分のアカウント
+                              Discord でログインしている自分のアカウント
                             </small>
                           </div>
                           <div className="full-width">
@@ -1118,13 +760,12 @@ function App() {
                               }
                             />
                             <small>
-                              空欄なら現在の Token
-                              を維持します。暗号化して保存し、次回は画面に読み戻しません。
+                              空欄なら保存済みTokenを維持します。暗号化し、画面には読み戻しません。
                             </small>
                           </div>
                         </div>
                         <div className="bot-forget">
-                          <button
+                          <Button hoverScale={1} tapScale={0.98}
                             type="button"
                             className="secondary"
                             disabled={!form.botTokenSet || form.clearBotToken}
@@ -1135,28 +776,14 @@ function App() {
                             }}
                           >
                             保存済み Bot Token を削除
-                          </button>
+                          </Button>
                           {form.clearBotToken && (
                             <span>
                               保存すると Token を削除し、通常受信に戻ります。
                             </span>
                           )}
                         </div>
-                        <label htmlFor="receiveMode">受信モード</label>
-                        <select
-                          id="receiveMode"
-                          name="receiveMode"
-                          value={form.receiveMode}
-                          onChange={(e) =>
-                            change("receiveMode", e.target.value as ReceiveMode)
-                          }
-                        >
-                          {receiveChoices.map((choice) => (
-                            <option key={choice.mode} value={choice.mode}>
-                              {choice.label}
-                            </option>
-                          ))}
-                        </select>
+                        <p className="inline-note">保存後、通知画面の「受信する通知」でBotによる自動判別を選べます。</p>
                         <div className="security-note">
                           <Shield size={18} />
                           <div>
@@ -1168,12 +795,12 @@ function App() {
                           </div>
                         </div>
                       </div>
-                    </section>
+                    </details>
                     <section
                       className="settings-card"
-                      role="tabpanel"
+                      role="region"
                       id="panel-display"
-                      aria-labelledby="tab-display"
+                      aria-label="表示・テーマ"
                       hidden={tab !== "display"}
                     >
                       <div className="section-heading">
@@ -1186,7 +813,7 @@ function App() {
                       <div className="setting-row">
                         <div>
                           <label htmlFor="theme">アプリのテーマ</label>
-                          <p id="theme-help">システムは OS のライト・ダーク設定に従います。変更は「保存」で確定します。</p>
+                          <p id="theme-help">システムは Windows のライト・ダーク設定に従います。変更は「保存」で確定します。</p>
                         </div>
                         <select id="theme" name="theme" className="theme-select"
                           aria-describedby="theme-help" value={form.theme}
@@ -1223,9 +850,9 @@ function App() {
                     </section>
                     <section
                       className="settings-card"
-                      role="tabpanel"
+                      role="region"
                       id="panel-sound"
-                      aria-labelledby="tab-sound"
+                      aria-label="通知音・動作"
                       hidden={tab !== "sound"}
                     >
                       <div className="section-heading">
@@ -1267,7 +894,7 @@ function App() {
                                   )
                                 : form.notificationSound === option.value;
                             return (
-                              <button
+                              <Button hoverScale={1} tapScale={0.98}
                                 key={option.value}
                                 type="button"
                                 className={selected ? "selected" : ""}
@@ -1290,7 +917,7 @@ function App() {
                                 </span>
                                 <strong>{option.title}</strong>
                                 <small>{option.text}</small>
-                              </button>
+                              </Button>
                             );
                           })}
                         </div>
@@ -1309,7 +936,7 @@ function App() {
                               }
                               placeholder="音声ファイルを選んでください"
                             />
-                            <button
+                            <Button hoverScale={1} tapScale={0.98}
                               type="button"
                               className="secondary"
                               onClick={async () => {
@@ -1325,7 +952,7 @@ function App() {
                             >
                               <FolderOpen size={15} />
                               参照
-                            </button>
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -1366,7 +993,7 @@ function App() {
                             関連アプリがすべて終了すると停止します。
                           </p>
                         </div>
-                        <button
+                        <Button hoverScale={1} tapScale={0.98}
                           type="button"
                           id="autoExitWithVr"
                           role="switch"
@@ -1377,14 +1004,14 @@ function App() {
                           }
                         >
                           <span className={`switch ${form.autoExitWithVr ? "on" : ""}`} aria-hidden="true"><span /></span>
-                        </button>
+                        </Button>
                       </div>
                     </section>
                     <section
                       className="settings-card connection-settings"
-                      role="tabpanel"
+                      role="region"
                       id="panel-discord"
-                      aria-labelledby="tab-discord"
+                      aria-label="Discord接続"
                       hidden={tab !== "discord"}
                     >
                       <div className="section-heading">
@@ -1396,7 +1023,8 @@ function App() {
                         </div>
                         <MessageCircle size={21} />
                       </div>
-                      <div className="setup-guide">
+                      <details className="setup-guide" open={!status.configured || undefined}>
+                        <summary>Discord アプリの作り方</summary>
                         <div>
                           <span className="step">1</span>
                           <p>
@@ -1418,15 +1046,15 @@ function App() {
                             Changes
                           </p>
                         </div>
-                        <button
+                        <Button hoverScale={1} tapScale={0.98}
                           type="button"
                           className="portal-button"
                           onClick={() => void action("open_portal")}
                         >
                           Developer Portal を開く
                           <ExternalLink size={13} />
-                        </button>
-                      </div>
+                        </Button>
+                      </details>
                       <div className="credential-fields">
                         <div>
                           <label htmlFor="clientId">Client ID</label>
@@ -1513,35 +1141,38 @@ function App() {
                         設定中は通知の転送を一時停止しています。
                       </span>
                       <div>
-                        <button
+                        <Button hoverScale={1} tapScale={0.98}
                           type="button"
                           className="secondary"
                           onClick={() => void cancel()}
                           disabled={busy}
                         >
                           キャンセル
-                        </button>
-                        <button
+                        </Button>
+                        <Button hoverScale={1} tapScale={0.98}
                           type="submit"
                           className="primary"
                           disabled={busy}
                         >
                           <Check size={16} />
                           {busy ? "保存中…" : "保存して戻る"}
-                        </button>
+                        </Button>
                       </div>
                     </div>
-                  </>
+                  </Fade>
                 )}
               </form>
             </>
           )}
+          </Fade>
           <footer className="page-footer">
             <span>DiToVR</span>
-            <span>いつもの通知を、いつものまま。</span>
+            <span>{status.storeManaged ? "Microsoft Store 版" : "GitHub 版"}</span>
           </footer>
         </main>
       </div>
+      {pendingPage && <LeaveDialog onStay={()=>setPendingPage(null)} onLeave={()=>void go(pendingPage)}/>}
+      <div className="toast-region" aria-live="polite" aria-atomic="true">
       {toast && (
         <div
           className={`toast ${toast.error ? "error" : ""}`}
@@ -1549,12 +1180,13 @@ function App() {
         >
           {toast.error ? <CircleHelp size={18} /> : <Check size={18} />}
           <p>{toast.message}</p>
-          <button aria-label="通知を閉じる" onClick={() => setToast(null)}>
+          <Button hoverScale={1} tapScale={0.98} aria-label="通知を閉じる" onClick={() => setToast(null)}>
             <X size={16} />
-          </button>
+          </Button>
         </div>
       )}
+      </div>
     </div>
   );
 }
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(<AnimateUIProvider tempo={0.85}><ReducedMotionConfig><App /></ReducedMotionConfig></AnimateUIProvider>);

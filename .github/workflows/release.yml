@@ -4,6 +4,8 @@ on:
   push:
     branches: [release]
     tags: ['v*']
+  # Store公開後に release-after-store.yml がタグ指定で実行する。手動でも同じ条件(タグ指定)で実行できる。
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -61,7 +63,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --manifest-path src-tauri/Cargo.toml --locked --features custom-protocol
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs
+          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/store-release-ready.test.mjs
       - name: Build release with updater signatures
         if: github.ref_type == 'tag'
         env:
@@ -108,8 +110,10 @@ jobs:
             target/tauri/release/bundle/nsis/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe
             target/tauri/release/bundle/nsis/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe.sig
             latest.json
+      # タグのpushでは検証とビルドだけ行う。公開は Microsoft Store の正式公開後に、
+      # release-after-store.yml がこのワークフローをタグ指定で起動したときだけ行う。
       - name: Publish stable GitHub release
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.distribution.outputs.release_files }}
@@ -118,7 +122,7 @@ jobs:
           generate_release_notes: false
           make_latest: true
       - name: Publish update feed outside release assets
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/publish-update-feed.mjs --publish

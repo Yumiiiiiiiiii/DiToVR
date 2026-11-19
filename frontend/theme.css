@@ -1,101 +1,41 @@
-:root {
+﻿:root {
   color-scheme: light;
-  --canvas: #f6f8fc;
-  --sidebar: #fcfdff;
-  --topbar: #fcfdffe8;
-  --surface: #fff;
-  --text: #202b40;
-  --muted: #657287;
-  --faint: #728097;
-  --border: #e6eaf1;
-  --border-strong: #d7deea;
-  --hover: #f3f5f9;
-  --accent: #3564df;
-  --accent-hover: #2853c8;
-  --accent-text: #fff;
-  --accent-soft: #eef3ff;
-  --accent-border: #dce6ff;
-  --focus: #7498ff88;
-  --green: #308463;
-  --green-soft: #edf8f2;
-  --green-border: #d7eedf;
-  --discord: #7881d7;
-  --discord-soft: #f0f0ff;
-  --stage: #f6f8fd;
-  --dot: #dce3ef;
-  --notification: #ffffffed;
-  --notification-border: #e2e7f0;
-  --input: #fff;
-  --error: #b54444;
-  --error-soft: #fff4f4;
-  --error-border: #f0cece;
-  --card-shadow: 0 2px 3px #20305003;
+  --canvas: #fafafa; --sidebar: #f3f3f3; --topbar: #fafafa;
+  --surface: #ffffff; --text: #202020; --muted: #626262; --faint: #707070;
+  --border: #dedede; --border-strong: #8c8c8c; --hover: #ebebeb;
+  --accent: #285dcc; --accent-hover: #214fb3; --accent-text: #ffffff;
+  --accent-soft: #edf3ff; --accent-border: #a8c1f4; --focus: #285dcc;
+  --green: #23724e; --green-soft: #edf7f1; --green-border: #b4d6c1;
+  --discord: #5a62b4; --discord-soft: #f0f0fa;
+  --stage: #f4f4f4; --input: #ffffff;
+  --error: #b12f39; --error-soft: #fff0f1; --error-border: #e5afb4;
+  --card-shadow: 0 2px 6px #00000004;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #101010; --sidebar: #151515; --topbar: #101010;
+  --surface: #1b1b1b; --text: #ededed; --muted: #acacac; --faint: #999999;
+  --border: #303030; --border-strong: #777777; --hover: #252525;
+  --accent: #87afff; --accent-hover: #a4c2ff; --accent-text: #101c35;
+  --accent-soft: #1a263c; --accent-border: #3e649c; --focus: #87afff;
+  --green: #89cfaa; --green-soft: #182b21; --green-border: #365b47;
+  --discord: #b4b5f2; --discord-soft: #252538;
+  --stage: #171717; --input: #191919;
+  --error: #ffadb4; --error-soft: #321c1e; --error-border: #84474d;
+  --card-shadow: none;
 }
 @media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"]):not([data-theme="dark"])) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) , :root[data-theme="system"] {
     color-scheme: dark;
-    --canvas: #141821;
-    --sidebar: #191d27;
-    --topbar: #191d27ed;
-    --surface: #1e2430;
-    --text: #e4e9f3;
-    --muted: #a0aabe;
-    --faint: #8995aa;
-    --border: #2e3646;
-    --border-strong: #3c475c;
-    --hover: #252d3b;
-    --accent: #8aaaff;
-    --accent-hover: #a0baff;
-    --accent-text: #15244b;
-    --accent-soft: #25314c;
-    --accent-border: #344767;
-    --focus: #8aaaff77;
-    --green: #8bcba9;
-    --green-soft: #22392f;
-    --green-border: #345343;
-    --discord: #b1afff;
-    --discord-soft: #2e2e4b;
-    --stage: #191f2c;
-    --dot: #2d374a;
-    --notification: #232c3aed;
-    --notification-border: #3a465b;
-    --input: #191f2b;
-    --error: #f1a1a1;
-    --error-soft: #39262c;
-    --error-border: #674049;
+    --canvas: #101010; --sidebar: #151515; --topbar: #101010;
+    --surface: #1b1b1b; --text: #ededed; --muted: #acacac; --faint: #999999;
+    --border: #303030; --border-strong: #777777; --hover: #252525;
+    --accent: #87afff; --accent-hover: #a4c2ff; --accent-text: #101c35;
+    --accent-soft: #1a263c; --accent-border: #3e649c; --focus: #87afff;
+    --green: #89cfaa; --green-soft: #182b21; --green-border: #365b47;
+    --discord: #b4b5f2; --discord-soft: #252538;
+    --stage: #171717; --input: #191919;
+    --error: #ffadb4; --error-soft: #321c1e; --error-border: #84474d;
     --card-shadow: none;
   }
-}
-:root:where([data-theme="dark"]) {
-  color-scheme: dark;
-  --canvas: #141821;
-  --sidebar: #191d27;
-  --topbar: #191d27ed;
-  --surface: #1e2430;
-  --text: #e4e9f3;
-  --muted: #a0aabe;
-  --faint: #8995aa;
-  --border: #2e3646;
-  --border-strong: #3c475c;
-  --hover: #252d3b;
-  --accent: #8aaaff;
-  --accent-hover: #a0baff;
-  --accent-text: #15244b;
-  --accent-soft: #25314c;
-  --accent-border: #344767;
-  --focus: #8aaaff77;
-  --green: #8bcba9;
-  --green-soft: #22392f;
-  --green-border: #345343;
-  --discord: #b1afff;
-  --discord-soft: #2e2e4b;
-  --stage: #191f2c;
-  --dot: #2d374a;
-  --notification: #232c3aed;
-  --notification-border: #3a465b;
-  --input: #191f2b;
-  --error: #f1a1a1;
-  --error-soft: #39262c;
-  --error-border: #674049;
-  --card-shadow: none;
 }

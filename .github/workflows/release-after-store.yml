@@ -1,0 +1,80 @@
+name: Release after Store publication
+
+# v* タグのビルドではGitHub Release と更新フィードを公開しない。
+# このワークフローが定期的にMicrosoft Storeの公開状態を確認し、
+# 正式公開された版のタグだけ release.yml をタグ指定で起動して公開する。
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Tag to check (vX.Y.Z). Empty means the newest unreleased v* tag.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ditovr-release-after-store
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Wait for Store publication, then release
+    if: github.repository == 'Yumiiiiiiiiii/DiToVR' && vars.MICROSOFT_STORE_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pick the tag waiting for publication
+        id: pick
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-}"
+          if [ -z "$tag" ]; then
+            # 最新の安定版タグ。GitHub Release が既にあるものは対象外。
+            tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          fi
+          if ! printf '%s' "$tag" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "No stable version tag to release."; echo "tag=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag already has a GitHub release."; echo "tag=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          running="$(gh run list --workflow release.yml --event workflow_dispatch --branch "$tag" --json status --jq '[.[] | select(.status != "completed")] | length')"
+          if [ "$running" != "0" ]; then
+            echo "A release run for $tag is already in progress."; echo "tag=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Check that the Store has published this version (read only)
+        id: store
+        if: steps.pick.outputs.tag != ''
+        env:
+          RELEASE_TAG: ${{ steps.pick.outputs.tag }}
+          AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          AZURE_AD_APPLICATION_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+          AZURE_AD_APPLICATION_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+        run: node scripts/store-release-ready.mjs
+      - name: Start the GitHub release and update feed
+        if: steps.store.outputs.ready == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          gh workflow run release.yml --ref "$RELEASE_TAG"
+          echo "Started release.yml for $RELEASE_TAG." >> "$GITHUB_STEP_SUMMARY"

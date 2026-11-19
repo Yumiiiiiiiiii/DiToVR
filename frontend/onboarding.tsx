@@ -84,7 +84,7 @@ export function Onboarding({ initial, status, busy, resumeConnection, onSave, on
   return (
     <div className="onboarding">
       <div className="page-heading">
-        <div><div className="eyebrow">LET'S GET STARTED</div><h1>はじめての設定</h1><p>ひとつずつ進めて、VR に通知を届けましょう。</p></div>
+        <div><span className="page-kicker">準備から、接続確認まで</span><h1>はじめての設定</h1><p>ひとつずつ進めて、VR に通知を届けましょう。</p></div>
         <span className="heading-icon"><Sparkles size={27} strokeWidth={1.5} /></span>
       </div>
       <ol className="tutorial-steps" aria-label="設定の進み具合">
@@ -93,7 +93,7 @@ export function Onboarding({ initial, status, busy, resumeConnection, onSave, on
         </li>)}
       </ol>
       <section className="tutorial-card" aria-labelledby="tutorial-heading">
-        <div className="tutorial-step-label">STEP {step + 1} / {steps.length}</div>
+        <div className="tutorial-step-label">手順 {step + 1} / {steps.length}</div>
         <h2 id="tutorial-heading" ref={heading} tabIndex={-1}>{["いつもの Discord を、VR の中へ。", "使うアプリを準備しましょう", "自分の Discord アプリを作りましょう", "通知の受け取り方を選びましょう", "保存できました。接続を確認しましょう"][step]}</h2>
         {step === 0 && <>
           <p className="tutorial-lead">{status.debugEnabled ? "今回は Discord の受信テスト専用です。XSOverlay・SteamVR は起動せず、Discord の接続設定を進めます。" : "Discord のメッセージ通知を XSOverlay に届けます。まずは通常の通知を受け取れるように設定します。"}</p>
@@ -136,7 +136,7 @@ export function Onboarding({ initial, status, busy, resumeConnection, onSave, on
             <div className="tutorial-callout"><Volume2 size={19} /><p>{values.notificationSound === "default" ? "標準の通知音を使います。" : "設定済みの通知音を使います。"}VR に通知は表示されません。XSOverlay への接続は必要です。</p></div>
             <label htmlFor="tutorial-volume">通知音の音量: {values.volumePercent}%</label>
             <input id="tutorial-volume" type="range" min="1" max="100" value={values.volumePercent} disabled={locked} aria-valuetext={`${values.volumePercent}%`} onChange={event => setValues({ ...values, volumePercent: Number(event.target.value) })} />
-          </> : <div className="tutorial-sample"><span>VR での表示例（ダミー）</span><strong>サンプルさん</strong><p>こんにちは！ VR の中でも届きます。</p></div>}
+          </> : <div className="tutorial-callout"><Bell size={19}/><p>名前・本文・アイコンを XSOverlay に送ります。表示時間と文字数は「表示・テーマ」で調整できます。</p></div>}
           <p className="tutorial-muted">次へ進むと接続設定を保存します。Discord の承認画面が開いたら、自分のアプリであることを確認して承認してください。</p>
         </>}
         {step === 4 && <>
@@ -147,13 +147,13 @@ export function Onboarding({ initial, status, busy, resumeConnection, onSave, on
           </div>
           {!status.debugEnabled && <button type="button" className="secondary" disabled={locked || !status.overlay || status.paused || status.preview} onClick={() => void run(async () => { await api("send_test"); setNotice(status.soundOnly ? "テスト通知を送信待ちに追加しました。通知音を確認してください。" : "テスト通知を送信待ちに追加しました。VR 内の表示と通知音を確認してください。"); })}><Bell size={16} />テスト通知を送る</button>}
           {notice && <p className="tutorial-notice" role="status">{notice}</p>}
-          <div className="tutorial-callout"><Info size={20} /><div><strong>取り込み中にも受け取りたい場合</strong><p>許可リストにチャンネル・DM を登録します。手動で切り替えるほか、Bot で取り込み中を自動判別できます。</p><button type="button" className="tutorial-text-button" disabled={locked} onClick={() => void run(() => onFinish(true))}>許可リスト・Bot の設定へ進む<ArrowRight size={15} /></button></div></div>
+          <div className="tutorial-callout"><Info size={20} /><div><strong>取り込み中にも受け取りたい場合</strong><p>ホームに戻ってから「許可リスト」でチャンネル・DM を登録できます。Bot による自動判別も、そこで設定できます。</p></div></div>
           <p className="tutorial-muted">×・Esc はトレイへ収納します。転送を止める場合は「アプリを終了」を選びます。接続確認はホームからも行えます。</p>
         </>}
         {error && <div className="tutorial-error" role="alert"><Info size={18} />{error.message}</div>}
         <div className="tutorial-footer">
           <button type="button" className="secondary" disabled={locked || step === 0} onClick={() => void back()}><ArrowLeft size={15} />戻る</button>
-          <button type="button" className="tutorial-text-button" disabled={locked} onClick={() => void run(onLater)}>{step === 4 ? "ホームであとから確認" : "あとで設定する"}</button>
+          {step < 4 && <button type="button" className="tutorial-text-button" disabled={locked} onClick={() => void run(onLater)}>あとで設定する</button>}
           <button type="button" className="primary" disabled={locked} onClick={() => void (step === 4 ? run(() => onFinish()) : next())}>{locked ? "処理中…" : ["設定をはじめる", "次へ", "次へ", "保存して接続を確認", ready ? "完了してホームへ" : "接続はあとで・ホームへ"][step]}<ArrowRight size={16} /></button>
         </div>
       </section>
