@@ -1,11 +1,11 @@
 {
-  "version": "0.3.0",
-  "notes": "DiToVR 0.3.0。変更内容は GitHub Releases をご覧ください。",
-  "pub_date": "2026-11-04T13:34:10.705Z",
+  "version": "0.4.1",
+  "notes": "DiToVR 0.4.1。変更内容は GitHub Releases をご覧ください。",
+  "pub_date": "2026-11-19T11:47:05.852Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.3.0/DiToVR_0.3.0_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXF2bFdITWFOaWUzVEgxckhvQXJUT0RoUkFLd01DZXgzdFdvU1k2bkVVbXZUZkdWUmZDNVZiOFlJend4Y0d0RXdLSnBtM1l0Q3FKUnluR3oxTjhBREVmR2R6UDloSHdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzNzk5MjUwCWZpbGU6RGlUb1ZSXzAuMy4wX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjMuMApsWW0wTkM5UEx6MkFucVJGMDNhbzNSdnl5cXRvWU1VM0VFRHVmdWhRdHFPbnc1M2s2NDc2c2NrMTB4R3dpeVlzSXBENnNPLzdRbjRJbVRCMkEwdE5BZz09Cg=="
+      "url": "https://github.com/Yumiiiiiiiiii/discord_To_VR/releases/download/v0.4.1/DiToVR_0.4.1_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXF2bFdITWFOaVV3YjRZbFNsQXlWdmN0c1RlNTdRZWIzNUtWRFdJZm1MM0pXZEJhY2Y0TXg0K3J1OWU5YmxkeElGK3RxOFY0VWxyQ0ZnRENmbE10bllTS3Fod2pQbndVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MDg4ODI0CWZpbGU6RGlUb1ZSXzAuNC4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjQuMQp5S3NqSG5WanZCUTU3dzZUYWlWZDV5NWIvTGlneHk2MmlhbXFQbXlFMVZuTmZxYjBKS2xxRCtCM2FUbUhUdzdwd3YybkY2OStPYUQxMUlVTzJrWGRDdz09Cg=="
     }
   }
 }
