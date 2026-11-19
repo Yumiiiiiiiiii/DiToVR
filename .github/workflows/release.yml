@@ -63,8 +63,9 @@ jobs:
           cargo test --manifest-path desktop/Cargo.toml --locked --features microsoft-store
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/store-release-ready.test.mjs scripts/check-store-connection.test.mjs
+      # Tags and the release branch both sign, so a signing problem is found before a tag is cut.
       - name: Build release with updater signatures
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || github.ref == 'refs/heads/release'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -76,7 +77,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/release-manifest.mjs
       - name: Build branch preview without update publication
-        if: github.ref_type != 'tag'
+        if: github.ref_type != 'tag' && github.ref != 'refs/heads/release'
         run: |
           ./scripts/build-installer.ps1
       - name: Verify uninstall data cleanup
