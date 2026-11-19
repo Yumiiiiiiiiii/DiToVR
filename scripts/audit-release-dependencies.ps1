@@ -12,5 +12,3 @@ $audit = Join-Path $auditDir 'cargo-audit-x86_64-pc-windows-msvc-v0.22.2/cargo-a
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $audit audit --file desktop/Cargo.lock
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& $audit audit --file tools/sign-update/Cargo.lock
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

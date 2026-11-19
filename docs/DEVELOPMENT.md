@@ -12,7 +12,6 @@ Microsoft Store 用 MSIX の作成・申請は [Store 配布ガイド](MICROSOFT
 | --- | --- |
 | `src/`、ルートの `Cargo.toml` | 共通 Core（Discord IPC、受信判定、XSOverlay、音声、設定、診断） |
 | `desktop/` | 製品本体（GPUI）。独立した Cargo manifest / lockfile。`installer/` に NSIS、`tests/fixtures/` に更新署名の検証データ |
-| `tools/sign-update/` | 更新インストーラーへバージョン入りの署名を付ける小さなツール |
 | `scripts/`、`store/`、`.github/workflows/` | 配布・Store 申請・CI |
 
 通常版と Microsoft Store 版は同じ `DiToVR.exe` です。`microsoft-store` feature で Store 版になり、独自の更新処理を持ちません。
@@ -86,7 +85,7 @@ Windows の発行元情報は `src-tauri/tauri.conf.json` の `bundle.publisher`
 
 ## ローカルで署名付きビルドを作る
 
-通常版のインストーラーは次のコマンドで作ります。`-Sign` を付けると、既存の更新鍵（`TAURI_SIGNING_PRIVATE_KEY`、未設定なら `%LOCALAPPDATA%\DiToVR-release-signing\updater.key`）で署名します。鍵は再生成しません。
+通常版のインストーラーは次のコマンドで作ります。`-Sign` を付けると、Tauri CLI の署名コマンド（`signer sign --app-version`、版を署名に結び付ける）で、既存の更新鍵（`TAURI_SIGNING_PRIVATE_KEY`、未設定なら `%LOCALAPPDATA%\DiToVR-release-signing\updater.key`）で署名します。鍵は再生成しません。
 
 ```powershell
 ./scripts/build-installer.ps1 -Sign

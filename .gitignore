@@ -1,7 +1,6 @@
 # Rust build artifacts and cache
 /target/
 /desktop/target/
-/tools/sign-update/target/
 /latest.json
 /DiToVR-tauri.zip
 /discord_To_VR-tauri.zip
