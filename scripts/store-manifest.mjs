@@ -1,7 +1,7 @@
 import {readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync} from "node:fs";
 import {resolve, join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {validateVersion} from "./release-manifest.mjs";
+import {readProduct, validateVersion} from "./release-manifest.mjs";
 
 const xml=value=>String(value).replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll("'","&apos;");
 export function storeManifest(identity, version) {
@@ -37,8 +37,8 @@ if (process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)
   if (!stage||!exe||!icons) throw new Error("Usage: node scripts/store-manifest.mjs STAGE EXE ICONS");
   const root=fileURLToPath(new URL("../",import.meta.url));
   const identity=JSON.parse(readFileSync(join(root,"store/identity.json"),"utf8"));
-  const config=JSON.parse(readFileSync(join(root,"src-tauri/tauri.conf.json"),"utf8"));
-  const version=validateVersion(config,readFileSync(join(root,"src-tauri/Cargo.toml"),"utf8"),JSON.parse(readFileSync(join(root,"package.json"),"utf8")));
+  const {config,cargo,pkg}=await readProduct();
+  const version=validateVersion(config,cargo,pkg);
   const binary=readFileSync(exe);
   const peOffset=binary.length>=64?binary.readUInt32LE(0x3c):0;
   if (peOffset<64 || peOffset+6>binary.length || binary.toString("ascii",peOffset,peOffset+4)!=="PE\0\0" || binary.readUInt16LE(peOffset+4)!==0x8664) throw new Error("The Store package requires an x64 Windows executable.");
@@ -46,9 +46,6 @@ if (process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)
   mkdirSync(join(stage,"Assets"),{recursive:true});
   writeFileSync(join(stage,"AppxManifest.xml"),storeManifest(identity,version));
   copyFileSync(exe,join(stage,"DiToVR.exe"));
-  // GNU builds dynamically link Microsoft's WebView2 loader. MSVC may link it statically.
-  const loader=join(dirname(exe),"WebView2Loader.dll");
-  if (existsSync(loader)) copyFileSync(loader,join(stage,"WebView2Loader.dll"));
   copyFileSync(join(root,"LICENSE"),join(stage,"LICENSE.txt"));
   copyFileSync(join(root,"THIRD_PARTY_AUDIO_NOTICES.txt"),join(stage,"THIRD_PARTY_AUDIO_NOTICES.txt"));
   copyFileSync(join(root,"THIRD_PARTY_UI_NOTICES.txt"),join(stage,"THIRD_PARTY_UI_NOTICES.txt"));

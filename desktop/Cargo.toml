@@ -1,0 +1,46 @@
+[package]
+name = "ditovr"
+version = "0.3.1"
+edition = "2024"
+publish = false
+description = "DiToVR: Discord notifications for VR (native Windows app, Rust / GPUI)"
+
+[[bin]]
+name = "DiToVR"
+path = "src/main.rs"
+
+# Keep the desktop host independent of the shared core's lockfile.
+[workspace]
+
+[features]
+# Store builds are updated by Microsoft Store: no self updater, no installer launch.
+microsoft-store = []
+
+[dependencies]
+ditovr-core = { path = ".." }
+gpui = { version = "=0.2.2", default-features = false, features = ["windows-manifest"] }
+gpui-component = { version = "=0.5.1", default-features = false }
+gpui-component-assets = "=0.5.1"
+rodio = { version = "=0.21.1", default-features = false, features = ["playback", "mp3", "vorbis", "wav"] }
+rfd = "=0.17.2"
+anyhow = "1"
+raw-window-handle = "0.6"
+async-channel = "2"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+windows-sys = { version = "0.59", features = ["Win32_System_Threading", "Win32_Foundation", "Win32_Security", "Win32_UI_WindowsAndMessaging", "Win32_Storage_Packaging_Appx", "Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_UI_Shell"] }
+tray-icon = { version = "=0.25.1", default-features = false }
+minisign-verify = "0.2"
+base64 = "0.22"
+
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.release]
+debug = false
+strip = true
+lto = "thin"
+codegen-units = 1

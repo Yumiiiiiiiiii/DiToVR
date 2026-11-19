@@ -1,6 +1,4 @@
 $ErrorActionPreference = 'Stop'
-npm audit --omit=dev
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $auditDir = Join-Path $env:RUNNER_TEMP 'cargo-audit'
 New-Item -ItemType Directory -Path $auditDir -Force | Out-Null
 $archive = Join-Path $auditDir 'cargo-audit.zip'
@@ -12,5 +10,7 @@ Expand-Archive -LiteralPath $archive -DestinationPath $auditDir -Force
 $audit = Join-Path $auditDir 'cargo-audit-x86_64-pc-windows-msvc-v0.22.2/cargo-audit.exe'
 & $audit audit --file Cargo.lock
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& $audit audit --file src-tauri/Cargo.lock
+& $audit audit --file desktop/Cargo.lock
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $audit audit --file tools/sign-update/Cargo.lock
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

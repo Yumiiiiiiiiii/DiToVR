@@ -37,10 +37,10 @@ test("Store staging includes audio and UI licenses and only the allowed applicat
     assert.deepEqual(readdirSync(stage).sort(),["AppxManifest.xml","Assets","DiToVR.exe","LICENSE.txt","THIRD_PARTY_AUDIO_NOTICES.txt","THIRD_PARTY_UI_NOTICES.txt"].sort());
     const root=fileURLToPath(new URL("../",import.meta.url));
     assert.equal(readFileSync(join(stage,"THIRD_PARTY_AUDIO_NOTICES.txt"),"utf8"),readFileSync(join(root,"THIRD_PARTY_AUDIO_NOTICES.txt"),"utf8"));
-    const config=JSON.parse(readFileSync(join(root,"src-tauri/tauri.conf.json"),"utf8"));
-    assert.equal(config.bundle.resources["../THIRD_PARTY_AUDIO_NOTICES.txt"],"THIRD_PARTY_AUDIO_NOTICES.txt");
+    const installer=readFileSync(join(root,"desktop/installer/DiToVR.nsi"),"utf8");
+    assert.match(installer,/THIRD_PARTY_AUDIO_NOTICES\.txt/);
     assert.equal(readFileSync(join(stage,"THIRD_PARTY_UI_NOTICES.txt"),"utf8"),readFileSync(join(root,"THIRD_PARTY_UI_NOTICES.txt"),"utf8"));
-    assert.equal(config.bundle.resources["../THIRD_PARTY_UI_NOTICES.txt"],"THIRD_PARTY_UI_NOTICES.txt");
+    assert.match(installer,/THIRD_PARTY_UI_NOTICES\.txt/);
   } finally {
     assert.equal(dirname(directory),tmpdir());
     rmSync(directory,{recursive:true,force:true});

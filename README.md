@@ -89,7 +89,7 @@ Microsoft Store から入れた場合は、Store のアプリ自動更新を使�
 
 ## はじめるには
 
-必要なものは、Windows 10 / 11、Discord デスクトップアプリ、SteamVR、XSOverlay、Microsoft Edge WebView2 Runtime です。Discord のブラウザー版には対応しません。
+必要なものは、Windows 10 / 11、Discord デスクトップアプリ、SteamVR、XSOverlay です。Discord のブラウザー版には対応しません。
 
 1. [Releases](https://github.com/Yumiiiiiiiiii/DiToVR/releases) で 0.2.0 以降の配布ファイルを確認します。自動更新を使う場合はインストーラー版を選びます。ZIP 版では `WebView2Loader.dll` を実行ファイルと同じフォルダーに置き、WebView2 Runtime を別途用意してください。
 2. Discord・SteamVR・XSOverlay を起動し、XSOverlay の通知用 WebSocket を有効にします。

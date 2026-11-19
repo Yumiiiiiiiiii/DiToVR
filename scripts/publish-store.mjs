@@ -6,7 +6,7 @@ import {execFileSync} from "node:child_process";
 import {setTimeout as sleep} from "node:timers/promises";
 import {singleFileZip, zipEntry} from "./store-archive.mjs";
 import {storeManifest} from "./store-manifest.mjs";
-import {repository, validateVersion} from "./release-manifest.mjs";
+import {readProduct, repository, validateVersion} from "./release-manifest.mjs";
 
 const apiRoot = "https://manage.devcenter.microsoft.com/v1.0/my";
 const accepted = new Set(["PreProcessing", "Certification", "PendingPublication", "Publishing", "Release", "Published"]);
@@ -176,8 +176,8 @@ async function main() {
   const tag = storeReleaseTag(process.env);
   const gitCommit = ref => execFileSync("git", ["rev-parse", "--verify", ref], {encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]}).trim();
   if (gitCommit("HEAD") !== gitCommit(`refs/tags/${tag}^{commit}`)) throw new Error("The checked-out Store source does not match the requested release tag.");
-  const config = JSON.parse(await readFile("src-tauri/tauri.conf.json", "utf8"));
-  const version = validateVersion(config, await readFile("src-tauri/Cargo.toml", "utf8"), JSON.parse(await readFile("package.json", "utf8")), storeVersionTag(tag));
+  const {config, cargo, pkg} = await readProduct();
+  const version = validateVersion(config, cargo, pkg, storeVersionTag(tag));
   const notes = await readFile(join("docs/release-notes", `${tag}.md`), "utf8");
   if (!notes.trim() || notes.trim().length > 1500) throw new Error("Store release notes must contain 1-1500 characters of changes.");
   if (process.argv.includes("--validate-release")) {

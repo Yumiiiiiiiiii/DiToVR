@@ -1,7 +1,7 @@
 import {appendFile, mkdir, readFile, writeFile} from "node:fs/promises";
 import {dirname, join, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
-import {feedBranch, manifest, repository, validateVersion} from "./release-manifest.mjs";
+import {feedBranch, manifest, readProduct, repository, validateVersion} from "./release-manifest.mjs";
 
 const apiRoot = `/repos/${repository}`;
 const installerName = version => `DiToVR_${version}_x64-setup.exe`;
@@ -30,7 +30,7 @@ export function distributionPlan(version, snapshot) {
   return {
     version, bridgeVersion, includeLegacyManifest, expectedHead: snapshot?.head ?? null,
     files: [
-      `target/tauri/release/bundle/nsis/${installerName(version)}`,
+      `target/installer/${installerName(version)}`,
       ...(includeLegacyManifest ? ["latest.json"] : []),
     ],
   };
@@ -122,9 +122,7 @@ async function main() {
     if (!response.ok) throw new Error(`GitHub update feed request failed (${response.status}).`);
     return response.json();
   };
-  const config = JSON.parse(await readFile("src-tauri/tauri.conf.json", "utf8"));
-  const cargo = await readFile("src-tauri/Cargo.toml", "utf8");
-  const pkg = JSON.parse(await readFile("package.json", "utf8"));
+  const {config, cargo, pkg} = await readProduct();
   const version = validateVersion(config, cargo, pkg, process.env.GITHUB_REF_NAME);
   const planPath = join(process.env.RUNNER_TEMP ?? "target", "update-feed-plan.json");
   if (process.argv.includes("--plan")) {

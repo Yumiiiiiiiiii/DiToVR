@@ -19,21 +19,20 @@ jobs:
     permissions:
       contents: write
     env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/target/tauri
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/desktop
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
       - name: Validate release version
         id: release-version
         run: |
           node scripts/release-manifest.mjs --validate
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $appVersion = (Get-Content -Raw -Encoding UTF8 'src-tauri/tauri.conf.json' | ConvertFrom-Json).version
+          if ((Get-Content -Raw -Encoding UTF8 'desktop/Cargo.toml') -notmatch '(?m)^version\s*=\s*"(\d+\.\d+\.\d+)"') { throw 'Could not read the desktop version.' }
+          $appVersion = $Matches[1]
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "version=$appVersion" -Encoding utf8
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and !(Test-Path -LiteralPath "docs/release-notes/$($env:GITHUB_REF_NAME).md" -PathType Leaf)) {
             throw 'Write the changes since the previous release in docs/release-notes before publishing.'
@@ -57,13 +56,15 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
       - name: Regression tests
         run: |
-          npm run build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --manifest-path src-tauri/Cargo.toml --locked --features custom-protocol
+          cargo test --manifest-path desktop/Cargo.toml --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/store-release-ready.test.mjs scripts/visible-poll.test.mjs
+          cargo test --manifest-path desktop/Cargo.toml --locked --features microsoft-store
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path tools/sign-update/Cargo.toml --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test scripts/release-manifest.test.mjs scripts/publish-update-feed.test.mjs scripts/store-manifest.test.mjs scripts/publish-store.test.mjs scripts/store-release-ready.test.mjs scripts/check-store-connection.test.mjs
       - name: Build release with updater signatures
         if: github.ref_type == 'tag'
         env:
@@ -73,27 +74,23 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
             throw 'Set the TAURI_SIGNING_PRIVATE_KEY repository secret before publishing.'
           }
-          npm run desktop:build -- --ci -- --locked
+          ./scripts/build-installer.ps1 -Sign
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/release-manifest.mjs
       - name: Build branch preview without update publication
         if: github.ref_type != 'tag'
         run: |
-          $override = Join-Path $env:RUNNER_TEMP 'tauri-preview.json'
-          [IO.File]::WriteAllText($override, '{"bundle":{"createUpdaterArtifacts":false}}')
-          npm run desktop:build -- --ci --config $override -- --locked
+          ./scripts/build-installer.ps1
       - name: Verify uninstall data cleanup
         run: |
           ./scripts/test-installer-hooks.ps1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ./scripts/test-installer-rename.ps1
       - name: Scan stable release files with Microsoft Defender
         if: github.ref_type == 'tag'
         run: |
           Update-MpSignature -ErrorAction Stop
           ./scripts/check-release-security.ps1 -Files @(
-            'target/tauri/release/DiToVR.exe',
-            'target/tauri/release/bundle/nsis/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe'
+            'target/desktop/release/DiToVR.exe',
+            'target/installer/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe'
           ) -ReportPath (Join-Path $env:RUNNER_TEMP 'ditovr-security.json')
       - name: Save release security report
         if: always() && github.ref_type == 'tag'
@@ -107,8 +104,8 @@ jobs:
         with:
           name: ditovr-windows
           path: |
-            target/tauri/release/bundle/nsis/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe
-            target/tauri/release/bundle/nsis/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe.sig
+            target/installer/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe
+            target/installer/DiToVR_${{ steps.release-version.outputs.version }}_x64-setup.exe.sig
             latest.json
       # タグのpushでは検証とビルドだけ行う。公開は Microsoft Store の正式公開後に、
       # release-after-store.yml がこのワークフローをタグ指定で起動したときだけ行う。
