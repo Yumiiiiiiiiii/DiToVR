@@ -11,7 +11,31 @@ permissions:
   contents: read
 
 jobs:
+  # 公開(GitHub Release と更新フィード)は、Microsoft Store が対象の版を正式公開した後だけ許可する。
+  # タグ指定の workflow_dispatch(release-after-store.yml からの起動を含む)でも、この確認を必ず通す。
+  # 確認できない・未公開・通信失敗はすべて失敗にして、後続の公開手順を実行させない。
+  store-gate:
+    name: Require Microsoft Store publication
+    if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check that the Store has published this exact version (read only)
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          STORE_REQUIRE_READY: 'true'
+          AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          AZURE_AD_APPLICATION_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+          AZURE_AD_APPLICATION_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+        run: node scripts/store-release-ready.mjs
   build-and-release:
+    needs: store-gate
+    # 公開しない実行(ブランチ・タグの push)ではゲートは省略される。公開する実行ではゲートの成功が必須。
+    if: ${{ !cancelled() && (needs.store-gate.result == 'success' || needs.store-gate.result == 'skipped') }}
     runs-on: windows-latest
     concurrency:
       group: ditovr-${{ github.ref_type == 'tag' && 'stable-release' || github.ref }}
@@ -109,7 +133,7 @@ jobs:
       # タグのpushでは検証とビルドだけ行う。公開は Microsoft Store の正式公開後に、
       # release-after-store.yml がこのワークフローをタグ指定で起動したときだけ行う。
       - name: Publish stable GitHub release
-        if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch'
+        if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch' && needs.store-gate.result == 'success'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.distribution.outputs.release_files }}
@@ -118,7 +142,7 @@ jobs:
           generate_release_notes: false
           make_latest: true
       - name: Publish update feed outside release assets
-        if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch'
+        if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch' && needs.store-gate.result == 'success'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/publish-update-feed.mjs --publish

@@ -113,6 +113,60 @@ pub fn tray(
 
 pub const WINDOW_TITLE: &str = "DiToVR";
 
+/// ウィンドウに付けるモード印（通常とプレビュー）。タイトルは両モードで同じため、
+/// 再起動時に別モードのウィンドウを復帰しないよう、所有者が窓の属性として持つ。
+const MODE_PROP: &str = "DiToVR.Mode";
+
+fn mode_mark(preview: bool) -> isize {
+    // 0 は「印なし」と区別できないため、1 起点にする。
+    1 + preview as isize
+}
+
+fn prop_name() -> Vec<u16> {
+    MODE_PROP.encode_utf16().chain(Some(0)).collect()
+}
+
+/// 自分のウィンドウにモード印を付ける。
+pub fn tag_window(handle: usize, preview: bool) {
+    let name = prop_name();
+    unsafe {
+        windows_sys::Win32::UI::WindowsAndMessaging::SetPropW(
+            handle as _,
+            name.as_ptr(),
+            mode_mark(preview) as _,
+        );
+    }
+}
+
+/// 候補（ウィンドウ, 印）から、同じモードのウィンドウを選ぶ。印のないウィンドウ（印を付ける前や旧版）は
+/// 同じモードの候補がないときだけ使い、別のモードの印があるものは使わない。
+fn pick_window(candidates: &[(usize, isize)], preview: bool) -> Option<usize> {
+    let mark = mode_mark(preview);
+    candidates
+        .iter()
+        .find(|(_, m)| *m == mark)
+        .or_else(|| candidates.iter().find(|(_, m)| *m == 0))
+        .map(|(window, _)| *window)
+}
+
+fn find_instance_window(preview: bool) -> Option<usize> {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetPropW, GetWindowTextW};
+    unsafe extern "system" fn collect(window: HWND, lparam: LPARAM) -> i32 {
+        let found = unsafe { &mut *(lparam as *mut Vec<(usize, isize)>) };
+        let mut text = [0u16; 64];
+        let length = unsafe { GetWindowTextW(window, text.as_mut_ptr(), text.len() as i32) };
+        if length > 0 && String::from_utf16_lossy(&text[..length as usize]) == WINDOW_TITLE {
+            let mark = unsafe { GetPropW(window, prop_name().as_ptr()) } as isize;
+            found.push((window as usize, mark));
+        }
+        1
+    }
+    let mut candidates = Vec::<(usize, isize)>::new();
+    unsafe { EnumWindows(Some(collect), &mut candidates as *mut _ as LPARAM) };
+    pick_window(&candidates, preview)
+}
+
 /// 単一起動の保持。Dropで解放する。
 pub struct InstanceGuard(usize);
 impl Drop for InstanceGuard {
@@ -127,7 +181,6 @@ pub fn single_instance(preview: bool) -> Option<InstanceGuard> {
     use windows_sys::Win32::{
         Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError},
         System::Threading::CreateMutexW,
-        UI::WindowsAndMessaging::FindWindowW,
     };
     let name: Vec<u16> = format!(
         "Local\\DiToVR-App{}\0",
@@ -141,10 +194,8 @@ pub fn single_instance(preview: bool) -> Option<InstanceGuard> {
     }
     if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
         unsafe { CloseHandle(handle) };
-        let title: Vec<u16> = format!("{WINDOW_TITLE}\0").encode_utf16().collect();
-        let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
-        if !window.is_null() {
-            set_visible(window as usize, true);
+        if let Some(window) = find_instance_window(preview) {
+            set_visible(window, true);
         }
         return None;
     }
@@ -164,5 +215,28 @@ pub fn open_url(url: &'static str) {
             std::ptr::null(),
             SW_SHOWNORMAL,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relaunch_restores_only_the_window_of_the_same_mode() {
+        let normal = mode_mark(false);
+        let preview = mode_mark(true);
+        assert_ne!(normal, preview);
+        assert!(normal != 0 && preview != 0);
+        // どちらの作成順でも、同じモードの窓を選ぶ。
+        assert_eq!(pick_window(&[(1, preview), (2, normal)], false), Some(2));
+        assert_eq!(pick_window(&[(1, normal), (2, preview)], false), Some(1));
+        assert_eq!(pick_window(&[(1, normal), (2, preview)], true), Some(2));
+        // 別モードの窓しかなければ、復帰しない。
+        assert_eq!(pick_window(&[(1, preview)], false), None);
+        assert_eq!(pick_window(&[(1, normal)], true), None);
+        // 印のない窓（印を付ける前・旧版）は、同じモードの候補がないときだけ使う。
+        assert_eq!(pick_window(&[(1, 0), (2, normal)], false), Some(2));
+        assert_eq!(pick_window(&[(1, 0), (2, preview)], false), Some(1));
     }
 }

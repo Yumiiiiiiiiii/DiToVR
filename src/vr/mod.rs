@@ -513,6 +513,24 @@ mod tests {
     use crate::diagnostics::{Diagnostics, Source};
 
     #[tokio::test]
+    async fn diagnostic_queue_never_reports_a_connection_and_stops_when_senders_close() {
+        // --debug: 診断用のキューは XSOverlay 接続を表さず、送信側が閉じれば終了する。
+        let (sender, rx) =
+            create_diagnostic_channel(Client::new(), Arc::new(AtomicBool::new(false)));
+        assert!(
+            !sender.is_connected.load(Ordering::SeqCst),
+            "never a VR connection"
+        );
+        let task = tokio::spawn(receive_diagnostic_loop(rx));
+        assert!(sender.send_notification("t", "c", None, "", 0.0, 1.0).await);
+        drop(sender);
+        assert!(
+            timeout(Duration::from_secs(2), task).await.is_ok(),
+            "loop ends after the last sender"
+        );
+    }
+
+    #[tokio::test]
     async fn worker_exits_when_every_external_sender_is_dropped() {
         use tokio::net::TcpListener;
         // 接続中: 受信側が閉じたら終了する（接続通知用の送信側が終了を妨げない）。

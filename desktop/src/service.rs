@@ -61,6 +61,9 @@ impl Workspace {
                     Ok(RawWindowHandle::Win32(h)) => h.hwnd.get() as usize,
                     _ => 0,
                 };
+                if handle != 0 {
+                    crate::shell::tag_window(handle, options.preview);
+                }
                 cx.spawn(async move |weak, cx| {
                     loop {
                         cx.background_executor().timer(Duration::from_secs(1)).await;

@@ -1,20 +1,20 @@
 //! 更新の設定表示と初回案内。更新処理本体は update.rs、接続処理は runtime.rs が担当する。
 use super::*;
-use crate::update::{Host, Phase, Updater};
+use crate::update::{Host, Phase, UpdateGate, Updater};
 use std::sync::{Arc, atomic::AtomicBool};
 
-/// 更新の適用前に、編集中の設定がなく受信を止められるかを確認する。
+/// 更新の適用を、設定の編集と排他的に予約し、受信を止める。
 pub(super) struct UpdateHost {
     pub runtime: crate::runtime::Runtime,
-    pub editing: Arc<AtomicBool>,
+    pub gate: Arc<UpdateGate>,
     /// 更新のために受信を止めたとき、止める前に動いていたか。ユーザーが止めていた受信は再開しない。
     was_running: AtomicBool,
 }
 impl UpdateHost {
-    pub fn new(runtime: crate::runtime::Runtime, editing: Arc<AtomicBool>) -> Self {
+    pub fn new(runtime: crate::runtime::Runtime, gate: Arc<UpdateGate>) -> Self {
         Self {
             runtime,
-            editing,
+            gate,
             was_running: AtomicBool::new(false),
         }
     }
@@ -22,18 +22,20 @@ impl UpdateHost {
 impl Host for UpdateHost {
     fn prepare(&self) -> bool {
         use std::sync::atomic::Ordering::SeqCst;
-        if self.editing.load(SeqCst) {
+        // 編集中でなければ適用を予約する。以降の編集の公開は予約を壊せない（UpdateGate）。
+        if !self.gate.try_reserve() {
             return false;
         }
         let running = self.runtime.services_running();
-        let paused = self.runtime.execute("pause", Default::default()).is_ok();
-        if paused {
-            self.was_running.store(running, SeqCst);
+        if self.runtime.execute("pause", Default::default()).is_err() {
+            self.gate.release();
+            return false;
         }
-        paused
+        self.was_running.store(running, SeqCst);
+        true
     }
-    fn can_install(&self) -> bool {
-        !self.editing.load(std::sync::atomic::Ordering::SeqCst)
+    fn commit(&self) -> bool {
+        self.gate.try_commit()
     }
     fn cancel(&self) {
         if self
@@ -42,6 +44,7 @@ impl Host for UpdateHost {
         {
             let _ = self.runtime.execute("connect", Default::default());
         }
+        self.gate.release();
     }
 }
 
@@ -121,7 +124,7 @@ impl Workspace {
         }
         updater.start(Arc::new(UpdateHost::new(
             runtime.clone(),
-            self.editing.clone(),
+            self.update_gate.clone(),
         )));
         self.updater = Some(updater);
     }
@@ -153,7 +156,7 @@ impl Workspace {
         let auto = s.auto_update;
         let host = Arc::new(UpdateHost::new(
             self.runtime.clone().expect("runtime"),
-            self.editing.clone(),
+            self.update_gate.clone(),
         ));
         self.row(
             "自動アップデート",

@@ -79,12 +79,67 @@ pub struct Release {
 
 /// 更新の適用前に呼ぶ確認。未保存の編集中などは false を返し、適用を待つ。
 pub trait Host: Send + Sync + 'static {
+    /// 設定の編集と排他的に「適用中」を予約し、受信を止める。予約できない間は false。
+    /// 予約は `cancel`（中止・失敗）までか、アプリの終了まで保持する。
     fn prepare(&self) -> bool;
-    /// 受信を止めた後、インストーラーを起動する直前の最終確認。編集が始まっていたら false。
-    fn can_install(&self) -> bool {
+    /// インストーラーの起動直前の確定。編集が始まっていて予約が取り消されたときは false。
+    fn commit(&self) -> bool {
         true
     }
     fn cancel(&self);
+}
+
+/// 設定の編集と更新の適用を排他にする状態。画面（UIスレッド）と更新タスクが共有する。
+///
+/// 空き → 編集中（画面が公開）／予約済み（更新が予約）→ 確定（インストーラー起動の直前）。
+/// - 更新は編集中でなければ `try_reserve` で予約する。予約中に画面が編集を公開すると、画面が予約を
+///   取り消し（編集中へ戻す）、更新は `try_commit` に失敗して待ち直す。ユーザーの編集が常に優先される。
+/// - `try_commit` が成功した後は編集の公開で取り消せない。確定はインストーラーのファイルを書き終えた
+///   直後（起動の直前）に行うため、確定後に残る時間はごくわずかで、画面は「適用中」と知らされる。
+#[derive(Default)]
+pub struct UpdateGate(std::sync::atomic::AtomicU8);
+
+impl UpdateGate {
+    const IDLE: u8 = 0;
+    const EDITING: u8 = 1;
+    const RESERVED: u8 = 2;
+    const COMMITTED: u8 = 3;
+
+    fn swap(&self, from: u8, to: u8) -> bool {
+        self.0
+            .compare_exchange(from, to, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+    }
+    /// 画面（UIスレッド）が毎フレーム呼ぶ。更新が確定済み（取り消せない）なら true を返す。
+    pub fn publish_editing(&self, editing: bool) -> bool {
+        loop {
+            let current = self.0.load(Ordering::SeqCst);
+            let next = match (current, editing) {
+                (Self::COMMITTED, _) => return true,
+                (Self::RESERVED, true) => Self::EDITING, // 予約済みの更新より、編集を優先する
+                (Self::IDLE, true) => Self::EDITING,
+                (Self::EDITING, false) => Self::IDLE,
+                _ => return false,
+            };
+            if self.swap(current, next) {
+                return false;
+            }
+        }
+    }
+    /// 編集中でなければ適用を予約する。
+    pub fn try_reserve(&self) -> bool {
+        self.swap(Self::IDLE, Self::RESERVED)
+    }
+    /// 予約が取り消されていなければ（編集が始まっていなければ）適用を確定する。
+    pub fn try_commit(&self) -> bool {
+        self.swap(Self::RESERVED, Self::COMMITTED)
+    }
+    /// 中止・失敗のとき。編集中へ戻された状態は変えない。
+    pub fn release(&self) {
+        if !self.swap(Self::RESERVED, Self::IDLE) {
+            self.swap(Self::COMMITTED, Self::IDLE);
+        }
+    }
 }
 
 /// Host のコールバックは同期で Runtime::execute（block_on）に届くため、非同期タスク上で直接呼ぶと
@@ -340,6 +395,12 @@ impl Updater {
         })
         .await
         .map_err(|_| "更新ファイルのダウンロードまたは署名・バージョン検証に失敗しました。現在のアプリは変更していません。".to_string())?;
+        // 検証済みのインストーラーは先に一時フォルダーへ書き出し、確定から起動までを最短にする。
+        let staged = tokio::task::spawn_blocking(move || stage_installer(&bytes))
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .ok_or("更新インストーラーを準備できませんでした。現在のアプリは変更していません。")?;
         self.mutate(|s| s.phase = Phase::Waiting);
         loop {
             loop {
@@ -368,16 +429,16 @@ impl Updater {
                 call_host(&host, |h| h.cancel()).await;
                 return Ok(());
             }
-            // 受信を止めている間に設定の編集が始まっていたら、未保存の入力を失わないよう待ち直す。
-            if call_host(&host, |h| h.can_install()).await.unwrap_or(false) {
+            if call_host(&host, |h| h.commit()).await.unwrap_or(false) {
                 break;
             }
+            // 予約中に設定の編集が始まった。編集を優先し、受信を戻して適用を待ち直す。
             call_host(&host, |h| h.cancel()).await;
             self.mutate(|s| s.phase = Phase::Waiting);
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
-        let installed = tokio::task::spawn_blocking(move || launch_installer(&bytes)).await;
-        if !matches!(installed, Ok(Ok(()))) {
+        let launched = tokio::task::spawn_blocking(move || launch_staged(&staged)).await;
+        if !matches!(launched, Ok(Ok(()))) {
             call_host(&host, |h| h.cancel()).await;
             return Err(
                 "更新インストーラーを起動できませんでした。通知の受信を再開しました。".into(),
@@ -535,14 +596,19 @@ pub fn allowed_download(url: &reqwest::Url) -> bool {
         && url.path().ends_with("-setup.exe")
 }
 
-/// 検証済みのNSISをパッシブで起動し、このプロセスを終了する(インストーラーが再起動する)。
-fn launch_installer(bytes: &[u8]) -> Result<(), String> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOW};
+/// 検証済みのNSISを一時フォルダーへ書き出す(まだ起動しない)。
+fn stage_installer(bytes: &[u8]) -> Result<PathBuf, String> {
     let directory = std::env::temp_dir().join(format!("DiToVR-update-{}", std::process::id()));
     std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     let file = directory.join("DiToVR-setup.exe");
     std::fs::write(&file, bytes).map_err(|e| e.to_string())?;
+    Ok(file)
+}
+
+/// 書き出し済みのNSISをパッシブで起動し、このプロセスを終了する(インストーラーが再起動する)。
+fn launch_staged(file: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOW};
     let wide = |s: &std::ffi::OsStr| -> Vec<u16> { s.encode_wide().chain(Some(0)).collect() };
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut parameters = String::from("/P /UPDATE /R");
@@ -656,6 +722,81 @@ fn installed_executable() -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn gate_reserves_only_when_idle_and_the_editor_wins_over_a_reservation() {
+        let gate = UpdateGate::default();
+        assert!(!gate.publish_editing(true));
+        assert!(!gate.try_reserve(), "editing blocks the reservation");
+        assert!(!gate.publish_editing(false));
+        assert!(gate.try_reserve());
+        assert!(!gate.try_reserve(), "a reservation is exclusive");
+        assert!(
+            !gate.publish_editing(false),
+            "a clean form keeps the reservation"
+        );
+        assert!(
+            gate.try_commit(),
+            "an untouched reservation can be committed"
+        );
+        gate.release();
+        // 予約後に編集が始まったら、画面が予約を取り消し、更新は確定できない。
+        assert!(gate.try_reserve());
+        assert!(
+            !gate.publish_editing(true),
+            "the edit is accepted, not blocked"
+        );
+        assert!(
+            !gate.try_commit(),
+            "the update must wait: the edit has priority"
+        );
+        gate.release();
+        assert!(
+            !gate.try_reserve(),
+            "release never clears an edit in progress"
+        );
+        assert!(!gate.publish_editing(false));
+        assert!(gate.try_reserve());
+    }
+
+    #[test]
+    fn a_committed_update_cannot_be_cancelled_by_editing_and_release_reopens_the_gate() {
+        let gate = UpdateGate::default();
+        assert!(gate.try_reserve() && gate.try_commit());
+        assert!(
+            gate.publish_editing(true),
+            "editing is told the update is applying"
+        );
+        assert!(gate.publish_editing(false), "and cannot revert the commit");
+        assert!(!gate.try_reserve());
+        gate.release(); // インストーラーの起動に失敗したとき
+        assert!(!gate.publish_editing(true));
+        assert!(!gate.try_reserve());
+    }
+
+    #[test]
+    fn commit_and_edit_never_both_succeed_under_races() {
+        for _ in 0..500 {
+            let gate = Arc::new(UpdateGate::default());
+            assert!(gate.try_reserve());
+            let editor = {
+                let gate = gate.clone();
+                std::thread::spawn(move || gate.publish_editing(true))
+            };
+            let committed = gate.try_commit();
+            let told_committed = editor.join().unwrap();
+            // 確定が成功したなら、編集は「確定済み」と知らされるか、確定より後に公開されたことになる。
+            // 編集が先に公開されたなら、確定は必ず失敗する。
+            if !committed {
+                assert!(!told_committed || gate.publish_editing(true));
+            } else {
+                assert!(
+                    gate.publish_editing(true),
+                    "after a successful commit editing cannot take over"
+                );
+            }
+        }
+    }
+
     /// 指定した生のHTTP応答を1回だけ返すローカルサーバーを起動し、その応答を取得する。
     async fn serve_once(raw: Vec<u8>) -> reqwest::Response {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};

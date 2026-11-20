@@ -15,7 +15,7 @@ Microsoft Store 版を公開しました。Store 版の更新は Microsoft Store
 ![通知の設定画面（ライト）。通知の届け方、受信する通知、通知音とテストを設定できます](docs/images/light-notify.png)
 ![通知の設定画面（ダーク）](docs/images/dark-notify.png)
 
-この README は v0.4.1 を紹介します。v0.4.0 から、画面を Rust のネイティブ UI（GPUI）に作り直しました。画像はダミー情報のプレビューです（`--ui-preview`）。GitHub 版・Store 版ともに DiToVR の名称を使用します。0.2.1 以前の配布ファイルには旧名称が残ります。
+この README は v0.4.2 を紹介します。**v0.4.1 をお使いの GitHub・BOOTH 版は、自動更新が完了しない場合があります。その場合は、最新のインストーラー（`DiToVR_0.4.2_x64-setup.exe`）を手動で実行してください。設定と認証情報は引き継がれます。Microsoft Store 版は Store が更新します。** v0.4.0 から、画面を Rust のネイティブ UI（GPUI）に作り直しました。画像はダミー情報のプレビューです（`--ui-preview`）。GitHub 版・Store 版ともに DiToVR の名称を使用します。0.2.1 以前の配布ファイルには旧名称が残ります。
 
 ## こんなときに使えます
 
