@@ -67,6 +67,19 @@ impl Workspace {
                 cx.spawn(async move |weak, cx| {
                     loop {
                         cx.background_executor().timer(Duration::from_secs(1)).await;
+                        // 非表示（トレイ格納中）は描画されない。更新の確定要求には、表示の有無にかかわらず
+                        // UIスレッドが最新の編集状態で応答する（応答しないと更新が受信の停止と再開を繰り返す）。
+                        let committed = weak.update(cx, |this, cx| {
+                            let dirty = this.is_dirty(cx);
+                            let committed = this.update_gate.publish_editing(dirty);
+                            if committed {
+                                this.feedback("更新を適用して再起動します…", false, cx);
+                            }
+                            committed
+                        });
+                        if committed.is_err() {
+                            break;
+                        }
                         if handle != 0 && !crate::shell::is_visible(handle) {
                             if runtime_exit(&weak, cx) {
                                 break;
@@ -79,9 +92,6 @@ impl Workspace {
                             .spawn(async move { runtime.view() })
                             .await;
                         let result = weak.update(cx, |this, cx| {
-                            // 非表示（トレイ格納中）は描画されないため、ここでも更新の確定要求に応答する。
-                            let dirty = this.is_dirty(cx);
-                            this.update_gate.publish_editing(dirty);
                             let update_changed = this.refresh_update_status();
                             if this.runtime_view.as_ref() != Some(&view) {
                                 this.update_runtime_status(&view);
