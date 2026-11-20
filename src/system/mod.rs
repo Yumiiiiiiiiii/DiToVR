@@ -1,4 +1,3 @@
-use std::io::{self, IsTerminal};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::time::sleep;
@@ -9,7 +8,6 @@ use windows_sys::Win32::System::Console::{
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
 
 static CONSOLE_REQUESTED: AtomicBool = AtomicBool::new(false);
 
@@ -87,26 +85,6 @@ pub fn attach_console() {
             if stdout.is_null() || stdout == INVALID_HANDLE_VALUE {
                 AllocConsole();
             }
-        }
-    }
-}
-
-pub fn report_error(message: &str) {
-    if CONSOLE_REQUESTED.load(Ordering::SeqCst)
-        || io::stderr().is_terminal()
-        || io::stdout().is_terminal()
-    {
-        eprintln!("❌ {message}");
-    } else {
-        let message: Vec<u16> = message.encode_utf16().chain(Some(0)).collect();
-        let title: Vec<u16> = "DiToVR".encode_utf16().chain(Some(0)).collect();
-        unsafe {
-            MessageBoxW(
-                std::ptr::null_mut(),
-                message.as_ptr(),
-                title.as_ptr(),
-                MB_OK | MB_ICONERROR,
-            );
         }
     }
 }

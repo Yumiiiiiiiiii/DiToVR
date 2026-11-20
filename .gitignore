@@ -19,6 +19,11 @@ config.json
 *.key.pub
 *.pem
 
+# Local scratch files and logs (agent/Codex working notes are never pushed)
+/scratchpad/
+/.codex/
+*.log
+
 # IDE and OS files
 .vscode/
 .idea/
@@ -38,7 +43,6 @@ Thumbs.db
 # Local agent handoff, design experiments and tooling (kept on disk, never pushed)
 /CLAUDE.md
 /HANDOFF.md
-/ARCHITECTURE.md
 /experiments/
 /ui-concepts/
 /docs/gpui-history/

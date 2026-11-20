@@ -1,22 +1,51 @@
 //! 更新の設定表示と初回案内。更新処理本体は update.rs、接続処理は runtime.rs が担当する。
 use super::*;
-use crate::update::{Host, Phase, Updater};
+use crate::update::{Host, Phase, UpdateGate, Updater};
 use std::sync::{Arc, atomic::AtomicBool};
 
-/// 更新の適用前に、編集中の設定がなく受信を止められるかを確認する。
+/// 更新の適用を、設定の編集と排他的に予約し、受信を止める。
 pub(super) struct UpdateHost {
     pub runtime: crate::runtime::Runtime,
-    pub editing: Arc<AtomicBool>,
+    pub gate: Arc<UpdateGate>,
+    /// 更新のために受信を止めたとき、止める前に動いていたか。ユーザーが止めていた受信は再開しない。
+    was_running: AtomicBool,
+}
+impl UpdateHost {
+    pub fn new(runtime: crate::runtime::Runtime, gate: Arc<UpdateGate>) -> Self {
+        Self {
+            runtime,
+            gate,
+            was_running: AtomicBool::new(false),
+        }
+    }
 }
 impl Host for UpdateHost {
     fn prepare(&self) -> bool {
-        if self.editing.load(std::sync::atomic::Ordering::SeqCst) {
+        use std::sync::atomic::Ordering::SeqCst;
+        // 編集中でなければ適用を予約する。以降の編集の公開は予約を壊せない（UpdateGate）。
+        if !self.gate.try_reserve() {
             return false;
         }
-        self.runtime.execute("pause", Default::default()).is_ok()
+        let running = self.runtime.services_running();
+        if self.runtime.execute("pause", Default::default()).is_err() {
+            self.gate.release();
+            return false;
+        }
+        self.was_running.store(running, SeqCst);
+        true
+    }
+    fn commit(&self) -> bool {
+        // 画面（UIスレッド）が最新の編集状態を見て確定する。最大3秒待つ。
+        self.gate.commit(std::time::Duration::from_secs(3))
     }
     fn cancel(&self) {
-        let _ = self.runtime.execute("connect", Default::default());
+        if self
+            .was_running
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            let _ = self.runtime.execute("connect", Default::default());
+        }
+        self.gate.release();
     }
 }
 
@@ -85,17 +114,19 @@ impl Workspace {
             ),
         };
         let path = directory.join("updates.json");
-        let updater = Updater::new(path.clone(), options.preview, options.debug);
-        if !options.preview && !updater.snapshot().store_managed {
+        // 旧保存先の設定は、Updater が読む前に移行する（読込後だと今回の起動に反映されない）。
+        let migration_failed = !options.preview && !crate::update::store_managed() && {
             let refs: Vec<&std::path::Path> = sources.iter().map(|p| p.as_path()).collect();
-            if crate::update::migrate_preferences_from(&refs, &path).is_err() {
-                updater.report_migration_failure();
-            }
+            crate::update::migrate_preferences_from(&refs, &path).is_err()
+        };
+        let updater = Updater::new(path.clone(), options.preview, options.debug);
+        if migration_failed {
+            updater.report_migration_failure();
         }
-        updater.start(Arc::new(UpdateHost {
-            runtime: runtime.clone(),
-            editing: self.editing.clone(),
-        }));
+        updater.start(Arc::new(UpdateHost::new(
+            runtime.clone(),
+            self.update_gate.clone(),
+        )));
         self.updater = Some(updater);
     }
 
@@ -124,10 +155,10 @@ impl Workspace {
         let toggle_updater = updater.clone();
         let check_updater = updater;
         let auto = s.auto_update;
-        let host = Arc::new(UpdateHost {
-            runtime: self.runtime.clone().expect("runtime"),
-            editing: self.editing.clone(),
-        });
+        let host = Arc::new(UpdateHost::new(
+            self.runtime.clone().expect("runtime"),
+            self.update_gate.clone(),
+        ));
         self.row(
             "自動アップデート",
             &format!("v{} · {detail}", s.current_version),
@@ -203,13 +234,25 @@ impl Workspace {
             .into_any_element()
     }
 
+    /// Runtime::execute は状態ロックを待つため、UIスレッドでは呼ばず背景で実行して結果だけ反映する。
     pub(super) fn finish_onboarding(&mut self, cx: &mut Context<Self>) {
-        if let Some(runtime) = &self.runtime
-            && let Ok(view) = runtime.execute("onboarding", Default::default())
-        {
-            self.runtime_view = Some(view);
-        }
-        cx.notify();
+        let Some(runtime) = self.runtime.clone() else {
+            cx.notify();
+            return;
+        };
+        cx.spawn(async move |weak, cx| {
+            let view = cx
+                .background_executor()
+                .spawn(async move { runtime.execute("onboarding", Default::default()).ok() })
+                .await;
+            let _ = weak.update(cx, |this, cx| {
+                if let Some(view) = view {
+                    this.runtime_view = Some(view);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub(super) fn go_to_page(&mut self, page: usize, cx: &mut Context<Self>) {

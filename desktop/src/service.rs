@@ -43,11 +43,13 @@ impl Workspace {
         let options = crate::runtime::OPTIONS.get().cloned().unwrap_or_default();
         match Runtime::new(&options) {
             Ok(runtime) => {
+                // 自動接続は音声変換などで状態ロックを長く保持する。先に初期表示用の状態を読み、
+                // 起動直後の画面（UIスレッド）がその完了を待たないようにする。
+                let v = runtime.view();
                 if !options.setup {
                     let starter = runtime.clone();
                     std::thread::spawn(move || starter.autostart());
                 }
-                let v = runtime.view();
                 self.apply_runtime(&v, window, cx);
                 self.message = v.message.clone();
                 self.error = v.error;
@@ -59,9 +61,25 @@ impl Workspace {
                     Ok(RawWindowHandle::Win32(h)) => h.hwnd.get() as usize,
                     _ => 0,
                 };
+                if handle != 0 {
+                    crate::shell::tag_window(handle, options.preview);
+                }
                 cx.spawn(async move |weak, cx| {
                     loop {
                         cx.background_executor().timer(Duration::from_secs(1)).await;
+                        // 非表示（トレイ格納中）は描画されない。更新の確定要求には、表示の有無にかかわらず
+                        // UIスレッドが最新の編集状態で応答する（応答しないと更新が受信の停止と再開を繰り返す）。
+                        let committed = weak.update(cx, |this, cx| {
+                            let dirty = this.is_dirty(cx);
+                            let committed = this.update_gate.publish_editing(dirty);
+                            if committed {
+                                this.feedback("更新を適用して再起動します…", false, cx);
+                            }
+                            committed
+                        });
+                        if committed.is_err() {
+                            break;
+                        }
                         if handle != 0 && !crate::shell::is_visible(handle) {
                             if runtime_exit(&weak, cx) {
                                 break;

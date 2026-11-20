@@ -274,6 +274,15 @@ impl Runtime {
             })),
         })
     }
+    #[cfg(test)]
+    pub fn preview_for_test() -> Self {
+        Self::at(
+            std::env::temp_dir().join("ditovr-repro/config.json"),
+            true,
+            None,
+        )
+        .unwrap()
+    }
     fn preview_config() -> Config {
         Config {
             client_id: "123456789012345678".into(),
@@ -328,6 +337,11 @@ impl Runtime {
                 tests: d.tests.validated + d.tests.sent,
             }
         })
+    }
+    /// 受信サービスが動いているか。Call from a worker, never the GUI thread.
+    pub fn services_running(&self) -> bool {
+        self.executor
+            .block_on(async { self.inner.lock().await.services.is_some() })
     }
     /// Call from a worker, never the GUI thread. Commands serialize against OAuth/settings changes.
     pub fn execute(&self, action: &str, patch: Patch) -> Result<View, String> {
@@ -478,9 +492,10 @@ impl Runtime {
                 let mut notifier = DiscordRPCNotifier::new(c, sender, http)
                     .with_trace(self.diagnostics.trace(Source::Simulation));
                 notifier.inject_test_notification(false, "1").await;
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                task.abort();
-                let _ = task.await;
+                // 送信側（notifier 内）を閉じると、受信ループはキューを処理し終えて自然に終了する。
+                drop(notifier);
+                task.await
+                    .map_err(|_| "模擬受信の検証処理が中断されました。")?;
                 Ok("模擬受信を共通Coreで検証しました。実受信・VR送信とは別に集計します。".into())
             }
             _ => Err("未対応の操作です。".into()),
@@ -537,7 +552,8 @@ impl Runtime {
                 self.control.clone(),
             )));
         }
-        if c.auto_exit_with_vr {
+        // --debug は XSOverlay・SteamVR に連動しない受信テスト専用。VR 終了による自動終了は行わない。
+        if c.auto_exit_with_vr && !self.debug {
             let (tx, mut rx) = tokio::sync::mpsc::channel(1);
             let exit = self.exit.clone();
             tasks.push(tokio::spawn(system::steamvr_monitor_loop(tx)));
@@ -687,6 +703,11 @@ impl Drop for Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stopped_services_report_not_running() {
+        // 更新が受信を止める前の状態を記録するために使う。プレビューは接続しない。
+        assert!(!Runtime::preview_for_test().services_running());
+    }
     #[test]
     fn public_view_and_simulation_do_not_expose_credentials_or_count_as_live() {
         let r = Runtime::at(

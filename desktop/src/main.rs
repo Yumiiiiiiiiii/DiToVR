@@ -61,7 +61,7 @@ struct Workspace {
     runtime_reload: bool,
     updater: Option<crate::update::Updater>,
     update_key: Option<UpdateKey>,
-    editing: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    update_gate: std::sync::Arc<crate::update::UpdateGate>,
     runtime_tray: Option<crate::shell::TraySession>,
     runtime_numbers: Vec<Entity<InputState>>,
     number_subscriptions: Vec<Subscription>,
@@ -201,7 +201,7 @@ impl Workspace {
             runtime_reload: false,
             updater: None,
             update_key: None,
-            editing: Default::default(),
+            update_gate: Default::default(),
             runtime_tray: None,
             runtime_numbers: vec![],
             number_subscriptions: vec![],
@@ -1321,43 +1321,42 @@ impl Workspace {
                 "操作時だけ描画します。",
                 self.note(if self.reduced { "抑制中" } else { "有効" }),
             ))
-            .child(
-                self.row(
-                    "画面サイズの確認",
-                    "",
-                    h_flex()
-                        .gap_2()
-                        .flex_wrap()
-                        .child(
-                            Button::new("compact-window")
-                                .label("小さく")
-                                .on_click(cx.listener(|_, _, window, _| {
+            // 画面サイズの確認は開発・撮影用。保存した設定で動く通常起動では表示しない（--ui-preview では表示）。
+            .when(!uses_saved_settings, |e| {
+                e.child(
+                    self.row(
+                        "画面サイズの確認",
+                        "",
+                        h_flex()
+                            .gap_2()
+                            .flex_wrap()
+                            .child(Button::new("compact-window").label("小さく").on_click(
+                                cx.listener(|_, _, window, _| {
                                     window.resize(size(px(640.), px(640.)));
-                                })),
-                        )
-                        .child(Button::new("standard-window").label("標準に戻す").on_click(
-                            cx.listener(|this, _, window, _| {
-                                window.resize(size(
-                                    px(match this.design {
-                                        2 => 1120.,
-                                        3 => 760.,
-                                        _ => 1040.,
-                                    }),
-                                    px(if this.runtime.is_some() { 800. } else { 900. }),
-                                ));
-                            }),
-                        ))
-                        .when(self.design == 3, |e| {
-                            e.child(
-                                Button::new("wide-window")
-                                    .label("広く")
-                                    .on_click(cx.listener(|_, _, window, _| {
+                                }),
+                            ))
+                            .child(Button::new("standard-window").label("標準に戻す").on_click(
+                                cx.listener(|this, _, window, _| {
+                                    window.resize(size(
+                                        px(match this.design {
+                                            2 => 1120.,
+                                            3 => 760.,
+                                            _ => 1040.,
+                                        }),
+                                        px(if this.runtime.is_some() { 800. } else { 900. }),
+                                    ));
+                                }),
+                            ))
+                            .when(self.design == 3, |e| {
+                                e.child(Button::new("wide-window").label("広く").on_click(
+                                    cx.listener(|_, _, window, _| {
                                         window.resize(size(px(1000.), px(800.)));
-                                    })),
-                            )
-                        }),
-                ),
-            )
+                                    }),
+                                ))
+                            }),
+                    ),
+                )
+            })
             // Coreの累積値はUIだけでリセットできないため、デモにだけ表示する。
             .when(self.runtime.is_none(), |e| {
                 e.child(
@@ -1388,8 +1387,8 @@ impl Render for Workspace {
         let p = self.p();
         let now = Instant::now();
         let dirty = self.is_dirty(cx);
-        self.editing
-            .store(dirty, std::sync::atomic::Ordering::SeqCst);
+        // 編集の有無と更新の確定の判断は、入力を変更するのと同じUIスレッドで行う（UpdateGate）。
+        let _applying_update = self.update_gate.publish_editing(dirty);
         if dirty != self.footer_dirty {
             if dirty && !self.error && !self.runtime_busy {
                 self.notice = false;

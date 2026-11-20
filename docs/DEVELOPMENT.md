@@ -43,19 +43,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-hooks
 
 この検証はワークスペースの `target` 内に作ったダミー設定だけを使います。実際のアプリ設定には触れません。
 
-署名付き配布ビルドには更新用の秘密鍵が必要です。[ビルド・公開手順](#ローカルで署名付きビルドを作る) を参照してください。用意済みの GNU / LLVM-MinGW 環境を使うローカルビルドは `npm.cmd run desktop:build:local` で実行でき、既定では `target/tauri` に出力します。このコマンドは別の PC にコンパイラーを自動インストールするものではありません。
+署名付き配布ビルドには更新用の秘密鍵が必要です。[ビルド・公開手順](#ローカルで署名付きビルドを作る) を参照してください。
 
-[設定のサンプル](../config.example.json) は参照用です。GUI からの保存後は自動で接続を再開し、設定ファイルを直接編集した場合は再起動が必要です。画面だけを試すには `DiToVR.exe --ui-preview` を使います。プレビューはダミー情報で動き、Discord・XSOverlay への接続や設定の読み書きは行いません。
+[設定のサンプル](../config.example.json) は参照用です。GUI からの保存後は、受信中だった場合に自動で接続を再開し、設定ファイルを直接編集した場合は再起動が必要です。画面だけを試すには `DiToVR.exe --ui-preview` を使います。プレビューはダミー情報で動き、Discord・XSOverlay への接続や設定の読み書きは行いません。
 
-`src/` は通知転送・設定保存などの共通ライブラリ、`src-tauri/` はアプリの起動とデスクトップ機能、`frontend/` は画面です。旧ネイティブ GUI とその起動用プログラムは削除し、起動先を Tauri 版に統一しています。
+`src/` は通知転送・設定保存などの共通ライブラリ、`desktop/` が画面とアプリの起動（GPUI）です。v0.3.x までの Tauri／React 構成（`src-tauri/`、`frontend/`、npm）は v0.4.0 で廃止しました。必要なときは v0.3.1 以前の Git 履歴とタグを参照してください。内部構造は [ARCHITECTURE.md](../ARCHITECTURE.md) にまとめています。
 
 ## 配布者の初回設定
 
-安定版タグの Actions は、npm と両方の Rust lockfile を監査し、Defender の定義を更新して、本体と setup を検査してから公開します。既知の脆弱性・検出・定義更新失敗・検査不能の場合は公開を止めます。Defender の検査結果は `ditovr-security` の成果物に保存します。これは Windows のコード署名とは別の確認で、すべての PC で検出されないことを保証しません。
+安定版タグの Actions は、両方の Rust lockfile（ルートと `desktop/`）を監査し、Defender の定義を更新して、本体と setup を検査してから公開します。既知の脆弱性・検出・定義更新失敗・検査不能の場合は公開を止めます。Defender の検査結果は `ditovr-security` の成果物に保存します。これは Windows のコード署名とは別の確認で、すべての PC で検出されないことを保証しません。
 
-Windows の発行元情報は `src-tauri/tauri.conf.json` の `bundle.publisher` で `DiToVR` に設定しています。アプリ一覧の発行元、実行ファイルとインストーラーの会社名へ反映します。この値と Windows の Authenticode 署名は別のものです。UAC・SmartScreen の認証済み発行元にはコード署名証明書が必要で、更新用の署名鍵ではその表示を変更できません。名称変更時は NSIS フックが旧名のインストールを `/UPDATE` で削除し、設定を保持して DiToVR に置き換えます。
+Windows の発行元情報は `desktop/installer/DiToVR.nsi` の `MANUFACTURER` で `DiToVR` に設定しています。アプリ一覧の発行元とインストーラーの会社名へ反映します。この値と Windows の Authenticode 署名は別のものです。UAC・SmartScreen の認証済み発行元にはコード署名証明書が必要で、更新用の署名鍵ではその表示を変更できません。名称変更時は NSIS フックが旧名のインストールを `/UPDATE` で削除し、設定を保持して DiToVR に置き換えます。
 
-名称変更後の保存先は `%APPDATA%\DiToVR` です。旧 `%APPDATA%\discord-to-vr`、旧 Tauri 保存先、実行ファイル隣の設定の順に引き継ぎます。二重起動防止と WebView の保存領域を維持するため Tauri identifier は変更せず、Store package identity も予約済みの値を維持します。公開済みファイル名・過去の検出記録は当時の名称を残しています。旧インストールの置き換えでは、既存のスタートメニュー・デスクトップのショートカットだけを新しい起動先へ引き継ぎます。置き換えテストは `target` 内のダミーだけを使い、実際のレジストリやインストールには触れません。
+名称変更後の保存先は `%APPDATA%\DiToVR` です。旧 `%APPDATA%\discord-to-vr`、旧 Tauri 保存先、実行ファイル隣の設定の順に引き継ぎます。旧 Tauri の identifier（`io.github.yumiiiiiiiiii.discord-to-vr`）は旧設定の移行元として読み取るだけで、書き込みません。二重起動防止の名前と Store package identity は、配布済みの値を維持します。公開済みファイル名・過去の検出記録は当時の名称を残しています。旧インストールの置き換えでは、既存のスタートメニュー・デスクトップのショートカットだけを新しい起動先へ引き継ぎます。置き換えテストは `target` 内のダミーだけを使い、実際のレジストリやインストールには触れません。
 
 この環境では更新用鍵を生成し、公開鍵をアプリへ組み込みました。秘密鍵はリポジトリ外の次の場所に保存しています。
 
@@ -68,8 +68,8 @@ Windows の発行元情報は `src-tauri/tauri.conf.json` の `bundle.publisher`
 ローカルビルドは `%LOCALAPPDATA%\DiToVR-release-signing\updater.key` を優先し、なければ上記の既存鍵を使います。名称変更だけを理由に鍵を生成し直す必要はありません。
 
 1. GitHub リポジトリの Settings → Secrets and variables → Actions で、`TAURI_SIGNING_PRIVATE_KEY` に秘密鍵ファイルの**内容**を登録します。ファイルのパスではありません。この環境の鍵はパスワードなしで生成したため、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` は未設定で構いません。
-2. `src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`package.json` と `package-lock.json` のアプリバージョンを揃えます。ルートの Cargo は共通ライブラリなので変更不要です。
-3. `docs/release-notes/v<バージョン>.md` に前回からの変更点だけを書き、検証後、同じバージョンの安定版タグ（例えば `v0.2.1`）を公開します。タグの Actions が署名付き NSIS インストーラーと更新情報を生成します。次回以降は実行用の ZIP 版と単独の `.sig` を GitHub Release に添付せず、ソースコードは GitHub 標準の「Source code (zip)」「Source code (tar.gz)」から取得します。リリース文にはその Markdown の内容を使用します。`release` ブランチだけのビルドは Actions の成果物を作り、公開更新を変更しません。
+2. アプリのバージョンは `desktop/Cargo.toml` の `version` だけを更新します（`scripts/release-manifest.mjs` がタグ・インストーラー名・署名と照合します）。ルートの Cargo は共通ライブラリなので変更不要です。
+3. `docs/release-notes/v<バージョン>.md` に前回からの変更点だけを書き、検証後、同じバージョンの安定版タグ（例えば `v0.2.1`）を公開します。タグの Actions は署名付き NSIS インストーラーと更新情報を検証・生成します。GitHub Release と更新フィードの公開は、Microsoft Store での正式公開を確認した後に `release-after-store.yml` がタグ指定で `release.yml` を起動して行います。次回以降は実行用の ZIP 版と単独の `.sig` を GitHub Release に添付せず、ソースコードは GitHub 標準の「Source code (zip)」「Source code (tar.gz)」から取得します。リリース文にはその Markdown の内容を使用します。`release` ブランチだけのビルドは Actions の成果物を作り、公開更新を変更しません。
 
 公開版の更新配信には上の設定が必要です。別のリポジトリへ移す場合は配布先の固定 URL と検証スクリプト、鍵を自分のものへ変更してください。
 

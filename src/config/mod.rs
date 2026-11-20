@@ -255,6 +255,15 @@ fn read_document(path: &Path) -> io::Result<Value> {
     Ok(raw)
 }
 
+/// 暗号化して保存する認証情報の一覧。読込経路（検証つき・設定画面用）で共有し、項目の追加漏れを防ぐ。
+fn decode_secrets(config: &mut Config) -> io::Result<()> {
+    config.client_secret = storage::decode_secret(&config.client_secret)?;
+    config.access_token = storage::decode_secret(&config.access_token)?;
+    config.refresh_token = storage::decode_secret(&config.refresh_token)?;
+    config.bot_token = storage::decode_secret(&config.bot_token)?;
+    Ok(())
+}
+
 fn decode_config(raw: &Value) -> io::Result<Config> {
     let mut config: Config = serde_json::from_value(raw.clone()).map_err(|_| {
         io::Error::new(
@@ -262,10 +271,7 @@ fn decode_config(raw: &Value) -> io::Result<Config> {
             "設定値の型が不正です。設定例を確認してください。",
         )
     })?;
-    config.client_secret = storage::decode_secret(&config.client_secret)?;
-    config.access_token = storage::decode_secret(&config.access_token)?;
-    config.refresh_token = storage::decode_secret(&config.refresh_token)?;
-    config.bot_token = storage::decode_secret(&config.bot_token)?;
+    decode_secrets(&mut config)?;
     config
         .validate()
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -292,10 +298,7 @@ pub fn setup_defaults(path: &Path) -> io::Result<Config> {
             let mut config: Config = serde_json::from_value(raw).map_err(|_| {
                 io::Error::other("設定値の型が不正です。config.json を確認してください。")
             })?;
-            config.client_secret = storage::decode_secret(&config.client_secret)?;
-            config.access_token = storage::decode_secret(&config.access_token)?;
-            config.refresh_token = storage::decode_secret(&config.refresh_token)?;
-            config.bot_token = storage::decode_secret(&config.bot_token)?;
+            decode_secrets(&mut config)?;
             Ok(config)
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Config::default()),
@@ -426,6 +429,43 @@ mod tests {
         fs::write(&path, original).unwrap();
         assert!(complete_onboarding_at(&path).is_err());
         assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn every_protected_secret_is_decoded_by_both_load_paths() {
+        let path =
+            std::env::temp_dir().join(format!("discord-vr-secrets-{}.json", uuid::Uuid::new_v4()));
+        let cfg = Config {
+            access_token: "all-paths-access".into(),
+            refresh_token: "all-paths-refresh".into(),
+            bot_token: "all-paths-bot".into(),
+            ..valid_config()
+        };
+        let mut raw = serde_json::to_value(&cfg).unwrap();
+        storage::protect_secrets(&mut raw).unwrap();
+        for key in [
+            "CLIENT_SECRET",
+            "ACCESS_TOKEN",
+            "REFRESH_TOKEN",
+            "BOT_TOKEN",
+        ] {
+            assert_ne!(
+                raw[key],
+                serde_json::to_value(&cfg).unwrap()[key],
+                "{key} is encrypted at rest"
+            );
+        }
+        fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+        for loaded in [
+            load_from_path(&path, false).unwrap(),
+            setup_defaults(&path).unwrap(),
+        ] {
+            assert_eq!(loaded.client_secret, cfg.client_secret);
+            assert_eq!(loaded.access_token, cfg.access_token);
+            assert_eq!(loaded.refresh_token, cfg.refresh_token);
+            assert_eq!(loaded.bot_token, cfg.bot_token);
+        }
         fs::remove_file(path).unwrap();
     }
 

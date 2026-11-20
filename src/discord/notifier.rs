@@ -114,14 +114,43 @@ pub(super) fn safe_text(text: &str, max_chars: usize) -> String {
 }
 
 /// Discord との接続・OAuth2認証・メッセージイベントの監視を行うメイン処理クラス
+/// 直近に処理したメッセージ ID（最大 MAX_SEEN_IDS 件）。再接続をまたいで保持する。
+#[derive(Default)]
+struct SeenIds {
+    set: HashSet<String>,
+    order: VecDeque<String>,
+}
+
+impl SeenIds {
+    /// ID は文字列または数値で届く。比較用の文字列に正規化する。
+    fn key(value: &Value) -> Option<String> {
+        value
+            .as_str()
+            .map(str::to_owned)
+            .or_else(|| value.as_u64().map(|n| n.to_string()))
+    }
+    fn contains(&self, id: &str) -> bool {
+        self.set.contains(id)
+    }
+    fn insert(&mut self, id: String) {
+        if self.set.insert(id.clone()) {
+            self.order.push_back(id);
+            if self.set.len() > MAX_SEEN_IDS {
+                if let Some(old) = self.order.pop_front() {
+                    self.set.remove(&old);
+                }
+            }
+        }
+    }
+}
+
 pub struct DiscordRPCNotifier {
     ipc: DiscordIPC,
     config: Config,
     xs_sender: XsOverlaySender,
     http_client: Client,
     pending_dispatches: VecDeque<Value>,
-    seen_message_ids: HashSet<String>,
-    seen_message_ids_order: VecDeque<String>,
+    seen_message_ids: SeenIds,
     current_user_id: Option<String>,
     authorization_attempted: bool,
     channel_cache: MetadataCache<NotificationContext>,
@@ -157,8 +186,7 @@ impl DiscordRPCNotifier {
             xs_sender,
             http_client,
             pending_dispatches: VecDeque::new(),
-            seen_message_ids: HashSet::new(),
-            seen_message_ids_order: VecDeque::new(),
+            seen_message_ids: SeenIds::default(),
             current_user_id: None,
             authorization_attempted: false,
             channel_cache: MetadataCache::new(),
@@ -533,35 +561,19 @@ impl DiscordRPCNotifier {
             return;
         }
 
-        // メッセージIDを取得し、ヒープアロケーション前に重複チェックを行って無駄な生成を防止する
-        let msg_id_val = message
+        // 重複判定は先に行うが、記録は受信条件（自分の投稿・空本文）を通った後に行う。
+        // 空の通知で ID を消費すると、同じ ID の本文つき通知が重複として捨てられるため。
+        let message_id = message
             .get("id")
             .or_else(|| data.get("id"))
-            .or_else(|| data.get("message_id"));
-
-        if let Some(v) = msg_id_val {
-            if let Some(id_str) = v.as_str() {
-                if self.seen_message_ids.contains(id_str) {
-                    self.record(Outcome::FilteredDuplicate);
-                    return;
-                }
-                let id_owned = id_str.to_string();
-                self.seen_message_ids.insert(id_owned.clone());
-                self.seen_message_ids_order.push_back(id_owned);
-            } else if let Some(id_num) = v.as_u64() {
-                let id_owned = id_num.to_string();
-                if self.seen_message_ids.contains(&id_owned) {
-                    self.record(Outcome::FilteredDuplicate);
-                    return;
-                }
-                self.seen_message_ids.insert(id_owned.clone());
-                self.seen_message_ids_order.push_back(id_owned);
-            }
-            if self.seen_message_ids.len() > MAX_SEEN_IDS {
-                if let Some(old_id) = self.seen_message_ids_order.pop_front() {
-                    self.seen_message_ids.remove(&old_id);
-                }
-            }
+            .or_else(|| data.get("message_id"))
+            .and_then(SeenIds::key);
+        if message_id
+            .as_deref()
+            .is_some_and(|id| self.seen_message_ids.contains(id))
+        {
+            self.record(Outcome::FilteredDuplicate);
+            return;
         }
 
         let author = message.get("author").unwrap_or(&Value::Null);
@@ -574,6 +586,9 @@ impl DiscordRPCNotifier {
         }
 
         if self.xs_sender.sound_only_mode() {
+            if let Some(id) = message_id {
+                self.seen_message_ids.insert(id);
+            }
             println!("📩 [受信] Discord 通知");
             sender
                 .send_notification(
@@ -617,6 +632,9 @@ impl DiscordRPCNotifier {
         if content.is_empty() {
             self.record(Outcome::FilteredEmpty);
             return;
+        }
+        if let Some(id) = message_id {
+            self.seen_message_ids.insert(id);
         }
         title = safe_text(&title, self.config.max_title_length);
         content = safe_text(&content, self.config.max_content_length);
@@ -1177,6 +1195,62 @@ mod tests {
         let hidden = rx.recv().await.unwrap();
         assert_eq!(hidden.title, "Discord");
         assert_eq!(hidden.content, "新しいメッセージがあります");
+    }
+
+    #[test]
+    fn seen_ids_normalize_numbers_and_evict_the_oldest() {
+        assert_eq!(SeenIds::key(&serde_json::json!("7")).as_deref(), Some("7"));
+        assert_eq!(SeenIds::key(&serde_json::json!(7)).as_deref(), Some("7"));
+        assert_eq!(SeenIds::key(&serde_json::json!(null)), None);
+        let mut seen = SeenIds::default();
+        for n in 0..=MAX_SEEN_IDS {
+            seen.insert(n.to_string());
+        }
+        assert!(!seen.contains("0"), "oldest id is evicted");
+        assert!(seen.contains("1") && seen.contains(&MAX_SEEN_IDS.to_string()));
+        seen.insert("1".into());
+        assert_eq!(
+            seen.order.len(),
+            seen.set.len(),
+            "re-inserting never duplicates"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_empty_event_does_not_consume_the_id_of_a_later_populated_one() {
+        let (sender, mut rx, connected) =
+            crate::vr::create_xsoverlay_channel(Client::new(), Arc::new(AtomicBool::new(false)));
+        connected.store(true, Ordering::SeqCst);
+        let mut notifier = DiscordRPCNotifier::new(
+            Config {
+                whitelist_channel_ids: vec!["100".into()],
+                receive_mode: super::super::receive::ReceiveMode::Whitelist,
+                ..Config::default()
+            },
+            sender,
+            Client::new(),
+        );
+        let event = |content: &str| {
+            serde_json::json!({
+                "channel_id": "100",
+                "message": {"id": "201", "author": {"id": "202", "username": "Example"}, "content": content}
+            })
+        };
+        notifier
+            .handle_notification(event(""), "MESSAGE_CREATE")
+            .await;
+        assert!(rx.try_recv().is_err());
+        notifier
+            .handle_notification(event("hello"), "MESSAGE_CREATE")
+            .await;
+        assert_eq!(rx.recv().await.unwrap().content, "hello");
+        notifier
+            .handle_notification(event("hello"), "MESSAGE_CREATE")
+            .await;
+        assert!(
+            rx.try_recv().is_err(),
+            "a delivered id is still a duplicate"
+        );
     }
 
     #[tokio::test]

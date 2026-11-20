@@ -174,7 +174,7 @@ async fn gateway_url(http: &Client, token: &str) -> Result<String, Failure> {
         .header(AUTHORIZATION, authorization)
         .send()
         .await
-        .map_err(|_| Failure::Retry(Duration::from_secs(10)))?;
+        .map_err(|_| retry_soon())?;
     let status = response.status();
     if status.as_u16() == 429 {
         let seconds = response
@@ -226,14 +226,44 @@ async fn gateway_url(http: &Client, token: &str) -> Result<String, Failure> {
         .and_then(trusted_gateway)
         .ok_or(Failure::Fatal)
 }
+/// 通常の再接続待ち（10 秒）。
+fn retry_soon() -> Failure {
+    Failure::Retry(Duration::from_secs(10))
+}
+
+/// HELLO（op 10）の heartbeat_interval。範囲外・op 違いは不正として扱う。
+fn heartbeat_interval(hello: &Value) -> Option<u64> {
+    hello
+        .pointer("/d/heartbeat_interval")
+        .and_then(Value::as_u64)
+        .filter(|ms| (1000..=300000).contains(ms))
+        .filter(|_| hello.get("op").and_then(Value::as_u64) == Some(10))
+}
+
+enum CloseAction {
+    /// 認証失敗・不正な設定など。再試行しても直らない。
+    Fatal,
+    /// セッションが無効。次は RESUME ではなく新しく IDENTIFY する。
+    DropSession,
+    Reconnect,
+}
+
+fn classify_close(code: u16) -> CloseAction {
+    match code {
+        4004 | 4010..=4014 => CloseAction::Fatal,
+        4007 | 4009 => CloseAction::DropSession,
+        _ => CloseAction::Reconnect,
+    }
+}
+
 async fn send(socket: &mut Socket, data: Value) -> Result<(), Failure> {
     timeout(
         IO_TIMEOUT,
         socket.send(Message::Text(data.to_string().into())),
     )
     .await
-    .map_err(|_| Failure::Retry(Duration::from_secs(10)))?
-    .map_err(|_| Failure::Retry(Duration::from_secs(10)))
+    .map_err(|_| retry_soon())?
+    .map_err(|_| retry_soon())
 }
 async fn connection(
     url: &str,
@@ -249,22 +279,16 @@ async fn connection(
         connect_async_with_config(url, Some(websocket), false),
     )
     .await
-    .map_err(|_| Failure::Retry(Duration::from_secs(10)))?
-    .map_err(|_| Failure::Retry(Duration::from_secs(10)))?;
+    .map_err(|_| retry_soon())?
+    .map_err(|_| retry_soon())?;
     let hello = timeout(IO_TIMEOUT, socket.next())
         .await
         .ok()
         .flatten()
         .and_then(Result::ok)
-        .ok_or(Failure::Retry(Duration::from_secs(10)))?;
-    let hello: Value = serde_json::from_slice(&hello.into_data())
-        .map_err(|_| Failure::Retry(Duration::from_secs(10)))?;
-    let interval = hello
-        .pointer("/d/heartbeat_interval")
-        .and_then(Value::as_u64)
-        .filter(|ms| (1000..=300000).contains(ms))
-        .filter(|_| hello.get("op").and_then(Value::as_u64) == Some(10))
-        .ok_or(Failure::Retry(Duration::from_secs(10)))?;
+        .ok_or_else(retry_soon)?;
+    let hello: Value = serde_json::from_slice(&hello.into_data()).map_err(|_| retry_soon())?;
+    let interval = heartbeat_interval(&hello).ok_or_else(retry_soon)?;
     let identify = if let (Some(id), Some(sequence)) = (&session.id, session.sequence) {
         json!({"op":6,"d":{"token":cfg.bot_token,"session_id":id,"seq":sequence}})
     } else {
@@ -285,7 +309,7 @@ async fn connection(
     loop {
         tokio::select! {
             _ = sleep_until(heartbeat) => {
-                if pending_ack { return Err(Failure::Retry(Duration::from_secs(10))); }
+                if pending_ack { return Err(retry_soon()); }
                 send(&mut socket, json!({"op":1,"d":session.sequence})).await?;
                 pending_ack = true;
                 heartbeat = Instant::now() + Duration::from_millis(interval);
@@ -294,17 +318,17 @@ async fn connection(
                 match frame {
                     Some(Ok(Message::Close(close))) => {
                         if let Some(close) = close {
-                            match u16::from(close.code) {
-                                4004 | 4010..=4014 => return Err(Failure::Fatal),
-                                4007 | 4009 => *session = Session::default(),
-                                _ => {}
+                            match classify_close(u16::from(close.code)) {
+                                CloseAction::Fatal => return Err(Failure::Fatal),
+                                CloseAction::DropSession => *session = Session::default(),
+                                CloseAction::Reconnect => {}
                             }
                         }
-                        return Err(Failure::Retry(Duration::from_secs(10)));
+                        return Err(retry_soon());
                     }
-                    Some(Ok(Message::Ping(bytes))) => { timeout(IO_TIMEOUT, socket.send(Message::Pong(bytes))).await.map_err(|_| Failure::Retry(Duration::from_secs(10)))?.map_err(|_| Failure::Retry(Duration::from_secs(10)))?; }
+                    Some(Ok(Message::Ping(bytes))) => { timeout(IO_TIMEOUT, socket.send(Message::Pong(bytes))).await.map_err(|_| retry_soon())?.map_err(|_| retry_soon())?; }
                     Some(Ok(Message::Text(bytes))) => {
-                        let data: Value = serde_json::from_str(&bytes).map_err(|_| Failure::Retry(Duration::from_secs(10)))?;
+                        let data: Value = serde_json::from_str(&bytes).map_err(|_| retry_soon())?;
                         if let Some(sequence) = data.get("s").and_then(Value::as_u64) { session.sequence = Some(sequence); }
                         match data.get("op").and_then(Value::as_u64) {
                             Some(0) => {
@@ -327,7 +351,7 @@ async fn connection(
                         }
                     }
                     Some(Ok(_)) => {},
-                    _ => return Err(Failure::Retry(Duration::from_secs(10))),
+                    _ => return Err(retry_soon()),
                 }
             }
         }
@@ -375,6 +399,21 @@ pub async fn run(cfg: Config, http: Client, control: ReceiveControl) {
 mod tests {
     use super::*;
     use crate::discord::receive::ReceiveMode;
+
+    #[test]
+    fn gateway_hello_and_close_codes_are_classified() {
+        let hello = |op: u64, ms: u64| json!({"op": op, "d": {"heartbeat_interval": ms}});
+        assert_eq!(heartbeat_interval(&hello(10, 41250)), Some(41250));
+        assert_eq!(heartbeat_interval(&hello(10, 999)), None);
+        assert_eq!(heartbeat_interval(&hello(10, 300001)), None);
+        assert_eq!(heartbeat_interval(&hello(0, 41250)), None);
+        assert!(matches!(classify_close(4004), CloseAction::Fatal));
+        assert!(matches!(classify_close(4014), CloseAction::Fatal));
+        assert!(matches!(classify_close(4007), CloseAction::DropSession));
+        assert!(matches!(classify_close(4009), CloseAction::DropSession));
+        assert!(matches!(classify_close(4000), CloseAction::Reconnect));
+        assert!(matches!(classify_close(1000), CloseAction::Reconnect));
+    }
     #[tokio::test]
     async fn missing_heartbeat_ack_disconnects_and_restricts_auto() {
         use tokio::net::TcpListener;

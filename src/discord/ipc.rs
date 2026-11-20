@@ -4,6 +4,16 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 
 const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
+/// 受信期限がほぼ尽きていても、PONG の書込には最低限の時間を与える。
+const MIN_PONG_BUDGET: Duration = Duration::from_millis(250);
+
+/// 受信期限内に収まるよう PONG の書込時間を絞る（短い問い合わせの予算を超えないため）。
+fn write_budget(deadline: tokio::time::Instant) -> Duration {
+    deadline
+        .saturating_duration_since(tokio::time::Instant::now())
+        .clamp(MIN_PONG_BUDGET, WRITE_TIMEOUT)
+}
 
 #[derive(Debug)]
 pub enum IpcError {
@@ -87,12 +97,12 @@ impl DiscordIPC {
 
     pub async fn send(&mut self, opcode: i32, payload: &Value) -> bool {
         match serde_json::to_vec(payload) {
-            Ok(bytes) => self.send_bytes(opcode, &bytes).await,
+            Ok(bytes) => self.send_bytes(opcode, &bytes, WRITE_TIMEOUT).await,
             Err(_) => false,
         }
     }
 
-    async fn send_bytes(&mut self, opcode: i32, bytes: &[u8]) -> bool {
+    async fn send_bytes(&mut self, opcode: i32, bytes: &[u8], budget: Duration) -> bool {
         if bytes.len() > MAX_FRAME_SIZE {
             return false;
         }
@@ -103,7 +113,7 @@ impl DiscordIPC {
         buf.extend_from_slice(&opcode.to_le_bytes());
         buf.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
         buf.extend_from_slice(bytes);
-        let result = tokio::time::timeout(Duration::from_secs(5), async {
+        let result = tokio::time::timeout(budget, async {
             stream.write_all(&buf).await?;
             stream.flush().await
         })
@@ -162,7 +172,7 @@ impl DiscordIPC {
                 }
                 3 => {
                     // Echo the exact ping payload, including non-JSON payloads.
-                    if !self.send_bytes(4, &bytes).await {
+                    if !self.send_bytes(4, &bytes, write_budget(deadline)).await {
                         return Err(IpcError::Disconnected);
                     }
                 }
@@ -185,6 +195,21 @@ impl DiscordIPC {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn pong_write_budget_stays_inside_the_receive_deadline() {
+        let now = tokio::time::Instant::now();
+        assert_eq!(write_budget(now + Duration::from_secs(60)), WRITE_TIMEOUT);
+        assert_eq!(
+            write_budget(now + Duration::from_millis(1000)),
+            Duration::from_millis(1000)
+        );
+        assert_eq!(
+            write_budget(now),
+            MIN_PONG_BUDGET,
+            "never zero: a ready pipe still gets its PONG"
+        );
+    }
 
     fn frame(payload: &[u8]) -> Vec<u8> {
         let mut bytes = 1i32.to_le_bytes().to_vec();
