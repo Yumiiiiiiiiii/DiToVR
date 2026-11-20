@@ -19,11 +19,11 @@ Windows、Node.js、Rust、C++ ビルド環境、Windows SDK の MakeAppx が必
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-store.ps1
 ```
 
-`target/store/<ビルドID>/DiToVR_0.2.1.0_x64.msix` を生成します。3桁バージョンに `.0` を付けます。更新には前回より大きいバージョンが必要です。Tauri、npm、デスクトップ Cargo のバージョンを合わせて更新します。
+`target/store/<ビルドID>/DiToVR_0.2.1.0_x64.msix` を生成します。3桁バージョンに `.0` を付けます。更新には前回より大きいバージョンが必要です。アプリのバージョン（`desktop/Cargo.toml`）を更新します。
 
 Store 用 feature を有効にして NSIS を作らず、実行ファイル、ライセンス、アイコン、新しい作業フォルダーへコピーします。設定・秘密鍵は含めません。SDK のマニフェスト検証を省略せず、実行ファイル、DLL、MSIX を Defender で検査します。検査できない場合や検出時は失敗します。
 
-**未署名 MSIX は Store アップロード専用**です。Microsoft が認定後に署名するため、購入した証明書や Tauri 更新署名鍵は不要です。この MSIX を一般利用者に直接配布しないでください。
+**未署名 MSIX は Store アップロード専用**です。Microsoft が認定後に署名するため、購入した証明書や更新署名鍵は不要です。この MSIX を一般利用者に直接配布しないでください。
 
 ## GitHub Actions で更新を自動申請する
 
@@ -61,13 +61,13 @@ Store 用 feature を有効にして NSIS を作らず、実行ファイル、�
 
 ### 次回以降の更新
 
-1. Tauri、`package.json`、デスクトップ Cargo のバージョンを、Store の全公開済みパッケージより大きくします。例: `0.2.1` → `0.2.2`。MSIX のバージョンは `0.2.2.0` になります。
+1. `desktop/Cargo.toml` のバージョンを、Store の全公開済みパッケージより大きくします。例: `0.2.1` → `0.2.2`。MSIX のバージョンは `0.2.2.0` になります。
 2. `docs/release-notes/v0.2.2.md` に、前回からの変更点だけを記載します。Store の「このバージョンの最新情報」にも同じ内容を使います。Store の上限に合わせて空白除去後 1,500 文字以内にしてください。
 3. コードと変更点を反映した `v0.2.2` タグを push します。タグとプロジェクトのバージョンが一致しなければ失敗します。
 4. Actions が Store 版テスト、MSIX ビルド、SDK 検証、Defender 検査を行い、検査レポートの SHA-256 と実際の MSIX・内包マニフェストを確認します。その後、公開済みの掲載文・画像・審査メモを引き継いで x64 パッケージを置き換え、認定へ送信します。他のアーキテクチャのパッケージは保持します。
 5. Actions のサマリーで申請 ID と受付状態を確認します。**受付成功は公開完了ではありません**。Microsoft の処理・認定が通ると自動公開され、その後の利用者への更新配信は Store が管理します。
 
-Store のみ更新するときは、通常タグの代わりに `store-v0.2.21` のようなタグを使い、変更点を `docs/release-notes/store-v0.2.21.md` に記載します。バージョンは同じく Tauri・npm・デスクトップ Cargo で揃え、公開済みパッケージより大きくします。Store 専用タグでは通常の Release workflow は起動せず、GitHub Releases・更新フィード・BOOTH の配布ファイルは変更されません。コードを `release` ブランチへ反映するコミットに `[skip ci]` を付ければ、ブランチ push のビルドも抑制できます。申請用タグのコミットには `[skip ci]` を付けないでください。
+Store のみ更新するときは、通常タグの代わりに `store-v0.2.21` のようなタグを使い、変更点を `docs/release-notes/store-v0.2.21.md` に記載します。バージョンは同じく `desktop/Cargo.toml` で管理し、公開済みパッケージより大きくします。Store 専用タグでは通常の Release workflow は起動せず、GitHub Releases・更新フィード・BOOTH の配布ファイルは変更されません。コードを `release` ブランチへ反映するコミットに `[skip ci]` を付ければ、ブランチ push のビルドも抑制できます。申請用タグのコミットには `[skip ci]` を付けないでください。
 
 既存の下書き・審査中の申請がある場合、バージョンの再利用・巻き戻し、識別情報の不一致、検査失敗時には自動申請を停止します。下書きを自動削除しません。アップロードや commit の途中で失敗・タイムアウトした場合は、ログの申請 ID を使って Partner Center の状態を先に確認してください。同じタグの再実行で未完了の申請を上書きすることはありません。
 
@@ -160,7 +160,6 @@ Store からのインストール、起動、Discord 受信、XSOverlay 送信�
 
 ## 公式資料
 
-- [Tauri を MSIX にする](https://learn.microsoft.com/en-us/windows/apps/dev-tools/winapp-cli/guides/tauri)
 - [配布方法と署名](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/choose-distribution-path)
 - [MSIX の AppData](https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-behind-the-scenes)
 - [GitHub Actions から Store を更新する](https://learn.microsoft.com/en-us/windows/apps/publish/msstore-dev-cli/github-actions)

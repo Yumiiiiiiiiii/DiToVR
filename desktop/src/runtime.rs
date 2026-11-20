@@ -552,7 +552,8 @@ impl Runtime {
                 self.control.clone(),
             )));
         }
-        if c.auto_exit_with_vr {
+        // --debug は XSOverlay・SteamVR に連動しない受信テスト専用。VR 終了による自動終了は行わない。
+        if c.auto_exit_with_vr && !self.debug {
             let (tx, mut rx) = tokio::sync::mpsc::channel(1);
             let exit = self.exit.clone();
             tasks.push(tokio::spawn(system::steamvr_monitor_loop(tx)));
