@@ -35,7 +35,8 @@ impl Host for UpdateHost {
         true
     }
     fn commit(&self) -> bool {
-        self.gate.try_commit()
+        // 画面（UIスレッド）が最新の編集状態を見て確定する。最大3秒待つ。
+        self.gate.commit(std::time::Duration::from_secs(3))
     }
     fn cancel(&self) {
         if self

@@ -79,6 +79,9 @@ impl Workspace {
                             .spawn(async move { runtime.view() })
                             .await;
                         let result = weak.update(cx, |this, cx| {
+                            // 非表示（トレイ格納中）は描画されないため、ここでも更新の確定要求に応答する。
+                            let dirty = this.is_dirty(cx);
+                            this.update_gate.publish_editing(dirty);
                             let update_changed = this.refresh_update_status();
                             if this.runtime_view.as_ref() != Some(&view) {
                                 this.update_runtime_status(&view);

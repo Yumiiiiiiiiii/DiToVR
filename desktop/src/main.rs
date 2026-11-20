@@ -1387,7 +1387,7 @@ impl Render for Workspace {
         let p = self.p();
         let now = Instant::now();
         let dirty = self.is_dirty(cx);
-        // 更新の適用が予約済みなら、編集中の公開で予約を壊さない（返り値は予約中かどうか）。
+        // 編集の有無と更新の確定の判断は、入力を変更するのと同じUIスレッドで行う（UpdateGate）。
         let _applying_update = self.update_gate.publish_editing(dirty);
         if dirty != self.footer_dirty {
             if dirty && !self.error && !self.runtime_busy {
