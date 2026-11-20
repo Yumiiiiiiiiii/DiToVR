@@ -43,11 +43,13 @@ impl Workspace {
         let options = crate::runtime::OPTIONS.get().cloned().unwrap_or_default();
         match Runtime::new(&options) {
             Ok(runtime) => {
+                // 自動接続は音声変換などで状態ロックを長く保持する。先に初期表示用の状態を読み、
+                // 起動直後の画面（UIスレッド）がその完了を待たないようにする。
+                let v = runtime.view();
                 if !options.setup {
                     let starter = runtime.clone();
                     std::thread::spawn(move || starter.autostart());
                 }
-                let v = runtime.view();
                 self.apply_runtime(&v, window, cx);
                 self.message = v.message.clone();
                 self.error = v.error;

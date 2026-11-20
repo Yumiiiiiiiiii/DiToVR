@@ -85,12 +85,14 @@ impl Workspace {
             ),
         };
         let path = directory.join("updates.json");
-        let updater = Updater::new(path.clone(), options.preview, options.debug);
-        if !options.preview && !updater.snapshot().store_managed {
+        // 旧保存先の設定は、Updater が読む前に移行する（読込後だと今回の起動に反映されない）。
+        let migration_failed = !options.preview && !crate::update::store_managed() && {
             let refs: Vec<&std::path::Path> = sources.iter().map(|p| p.as_path()).collect();
-            if crate::update::migrate_preferences_from(&refs, &path).is_err() {
-                updater.report_migration_failure();
-            }
+            crate::update::migrate_preferences_from(&refs, &path).is_err()
+        };
+        let updater = Updater::new(path.clone(), options.preview, options.debug);
+        if migration_failed {
+            updater.report_migration_failure();
         }
         updater.start(Arc::new(UpdateHost {
             runtime: runtime.clone(),
@@ -203,13 +205,25 @@ impl Workspace {
             .into_any_element()
     }
 
+    /// Runtime::execute は状態ロックを待つため、UIスレッドでは呼ばず背景で実行して結果だけ反映する。
     pub(super) fn finish_onboarding(&mut self, cx: &mut Context<Self>) {
-        if let Some(runtime) = &self.runtime
-            && let Ok(view) = runtime.execute("onboarding", Default::default())
-        {
-            self.runtime_view = Some(view);
-        }
-        cx.notify();
+        let Some(runtime) = self.runtime.clone() else {
+            cx.notify();
+            return;
+        };
+        cx.spawn(async move |weak, cx| {
+            let view = cx
+                .background_executor()
+                .spawn(async move { runtime.execute("onboarding", Default::default()).ok() })
+                .await;
+            let _ = weak.update(cx, |this, cx| {
+                if let Some(view) = view {
+                    this.runtime_view = Some(view);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub(super) fn go_to_page(&mut self, page: usize, cx: &mut Context<Self>) {

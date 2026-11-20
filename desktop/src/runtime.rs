@@ -274,6 +274,15 @@ impl Runtime {
             })),
         })
     }
+    #[cfg(test)]
+    pub fn preview_for_test() -> Self {
+        Self::at(
+            std::env::temp_dir().join("ditovr-repro/config.json"),
+            true,
+            None,
+        )
+        .unwrap()
+    }
     fn preview_config() -> Config {
         Config {
             client_id: "123456789012345678".into(),
@@ -478,9 +487,10 @@ impl Runtime {
                 let mut notifier = DiscordRPCNotifier::new(c, sender, http)
                     .with_trace(self.diagnostics.trace(Source::Simulation));
                 notifier.inject_test_notification(false, "1").await;
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                task.abort();
-                let _ = task.await;
+                // 送信側（notifier 内）を閉じると、受信ループはキューを処理し終えて自然に終了する。
+                drop(notifier);
+                task.await
+                    .map_err(|_| "模擬受信の検証処理が中断されました。")?;
                 Ok("模擬受信を共通Coreで検証しました。実受信・VR送信とは別に集計します。".into())
             }
             _ => Err("未対応の操作です。".into()),

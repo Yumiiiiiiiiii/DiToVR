@@ -217,6 +217,11 @@ impl XsOverlaySender {
         sender.sound_only = sound_only;
         sender
     }
+    /// キューの受信側が閉じた状態の送信側にして、このハンドルが受信側の終了を妨げないようにする。
+    fn detached_from_queue(mut self) -> Self {
+        self.tx = mpsc::channel(1).0;
+        self
+    }
     pub fn sound_only_mode(&self) -> bool {
         self.sound_only.load(Ordering::SeqCst)
     }
@@ -393,6 +398,10 @@ async fn xsoverlay_loop_at(
     url: &str,
 ) {
     let _guard = ConnectionGuard(is_connected.clone());
+    // 受信側は自分用の送信側を持つと、外部の送信側が全て閉じても終了できない。
+    // 接続通知は弱い参照から一時的に送信側を作って送る。
+    let notice_queue = sender.tx.downgrade();
+    let sender = sender.detached_from_queue();
     let mut icon_cache = HashMap::<String, String>::new();
     loop {
         match timeout(SEND_TIMEOUT, connect_async(url)).await {
@@ -400,16 +409,20 @@ async fn xsoverlay_loop_at(
                 is_connected.store(true, Ordering::SeqCst);
                 println!("✅ [XSOverlay] 接続しました。Discord の接続状態は別途表示されます。");
                 if !sender.sound_only_mode() {
-                    sender
-                        .send_notification(
-                            SENDER_NAME,
-                            "XSOverlay に接続しました",
-                            None,
-                            "",
-                            0.0,
-                            5.0,
-                        )
-                        .await;
+                    if let Some(tx) = notice_queue.upgrade() {
+                        let mut notice = sender.clone();
+                        notice.tx = tx;
+                        notice
+                            .send_notification(
+                                SENDER_NAME,
+                                "XSOverlay に接続しました",
+                                None,
+                                "",
+                                0.0,
+                                5.0,
+                            )
+                            .await;
+                    }
                 }
                 let (mut ws_tx, mut ws_rx) = ws_stream.split();
                 let mut ping_interval = interval(Duration::from_secs(10));
@@ -487,6 +500,9 @@ async fn xsoverlay_loop_at(
         while let Ok(mut notification) = rx.try_recv() {
             notification.finish(Outcome::DropDisconnected);
         }
+        if rx.is_closed() {
+            return; // 送信側が全て閉じたので、再接続を続ける意味がない。
+        }
         sleep(Duration::from_secs(3)).await;
     }
 }
@@ -495,6 +511,55 @@ async fn xsoverlay_loop_at(
 mod tests {
     use super::*;
     use crate::diagnostics::{Diagnostics, Source};
+
+    #[tokio::test]
+    async fn worker_exits_when_every_external_sender_is_dropped() {
+        use tokio::net::TcpListener;
+        // 接続中: 受信側が閉じたら終了する（接続通知用の送信側が終了を妨げない）。
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let peer = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+            while ws.next().await.is_some() {}
+        });
+        let (sender, rx, connected) =
+            create_xsoverlay_channel(Client::new(), Arc::new(AtomicBool::new(false)));
+        let loop_sender = sender.clone();
+        let task = tokio::spawn(async move {
+            xsoverlay_loop_at(rx, connected, loop_sender, &format!("ws://{address}")).await;
+        });
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        drop(sender);
+        assert!(
+            timeout(Duration::from_secs(5), task).await.is_ok(),
+            "connected worker must stop"
+        );
+        peer.abort();
+
+        // 接続できない間（再接続待ち）でも、送信側が全て閉じていれば終了する。
+        let unused = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let closed_address = unused.local_addr().unwrap();
+        drop(unused);
+        let (sender, rx, connected) =
+            create_xsoverlay_channel(Client::new(), Arc::new(AtomicBool::new(false)));
+        let loop_sender = sender.clone();
+        let task = tokio::spawn(async move {
+            xsoverlay_loop_at(
+                rx,
+                connected,
+                loop_sender,
+                &format!("ws://{closed_address}"),
+            )
+            .await;
+        });
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        drop(sender);
+        assert!(
+            timeout(Duration::from_secs(8), task).await.is_ok(),
+            "waiting worker must stop"
+        );
+    }
 
     #[tokio::test]
     async fn pending_notifications_switch_to_audio_only_without_visual_payloads() {

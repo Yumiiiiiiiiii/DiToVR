@@ -83,6 +83,26 @@ pub trait Host: Send + Sync + 'static {
     fn cancel(&self);
 }
 
+/// Host のコールバックは同期で Runtime::execute（block_on）に届くため、非同期タスク上で直接呼ぶと
+/// 「ランタイム内でのランタイム起動」で panic する。専用のブロッキングスレッドで実行する。
+async fn call_host<T: Send + 'static>(
+    host: &Arc<dyn Host>,
+    f: impl FnOnce(&dyn Host) -> T + Send + 'static,
+) -> Option<T> {
+    let host = host.clone();
+    tokio::task::spawn_blocking(move || f(host.as_ref()))
+        .await
+        .ok()
+}
+
+/// 失敗・panic・キャンセルのどの経路でも busy を解除する。
+struct BusyGuard(Arc<AtomicBool>);
+impl Drop for BusyGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
 #[derive(Clone)]
 pub struct Updater {
     status: Arc<Mutex<UpdateStatus>>,
@@ -254,8 +274,8 @@ impl Updater {
         if self.busy.swap(true, Ordering::SeqCst) {
             return Err("更新処理が進行中です。".into());
         }
+        let _busy = BusyGuard(self.busy.clone());
         let result = self.update_flow(host).await;
-        self.busy.store(false, Ordering::SeqCst);
         if let Err(message) = &result {
             self.fail(message);
         }
@@ -322,7 +342,7 @@ impl Updater {
                 self.mutate(|s| s.phase = Phase::Available);
                 return Ok(());
             }
-            if host.prepare() {
+            if call_host(&host, |h| h.prepare()).await.unwrap_or(false) {
                 break;
             }
             tokio::time::sleep(Duration::from_secs(2)).await;
@@ -340,12 +360,12 @@ impl Updater {
             enabled
         };
         if !apply {
-            host.cancel();
+            call_host(&host, |h| h.cancel()).await;
             return Ok(());
         }
         let installed = tokio::task::spawn_blocking(move || launch_installer(&bytes)).await;
         if !matches!(installed, Ok(Ok(()))) {
-            host.cancel();
+            call_host(&host, |h| h.cancel()).await;
             return Err(
                 "更新インストーラーを起動できませんでした。通知の受信を再開しました。".into(),
             );
@@ -372,9 +392,10 @@ pub async fn fetch_release(
         if !response.status().is_success() {
             continue;
         }
-        let feed: Feed = response
-            .json()
+        let body = read_limited(response, MAX_FEED_BYTES, |_, _| {})
             .await
+            .map_err(|_| "更新情報を読めませんでした。".to_string())?;
+        let feed: Feed = serde_json::from_slice(&body)
             .map_err(|_| "更新情報を読めませんでした。".to_string())?;
         if !is_newer(&feed.version, current)? {
             return Ok(None);
@@ -413,12 +434,36 @@ fn is_newer(candidate: &str, current: &str) -> Result<bool, String> {
     Ok(parse_version(candidate)? > parse_version(current)?)
 }
 
+const MAX_FEED_BYTES: u64 = 1024 * 1024;
+const MAX_INSTALLER_BYTES: u64 = 200 * 1024 * 1024;
+
+/// 申告された長さと累積サイズの両方を上限で止め、署名検証前のメモリ増大を防ぐ。
+async fn read_limited(
+    mut response: reqwest::Response,
+    limit: u64,
+    mut progress: impl FnMut(u64, Option<u64>),
+) -> Result<Vec<u8>, String> {
+    let total = response.content_length();
+    if total.is_some_and(|length| length > limit) {
+        return Err("download".into());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| "download")? {
+        if bytes.len() as u64 + chunk.len() as u64 > limit {
+            return Err("download".into());
+        }
+        bytes.extend_from_slice(&chunk);
+        progress(chunk.len() as u64, total);
+    }
+    Ok(bytes)
+}
+
 pub async fn download(
     client: &reqwest::Client,
     release: &Release,
-    mut progress: impl FnMut(u64, Option<u64>),
+    progress: impl FnMut(u64, Option<u64>),
 ) -> Result<Vec<u8>, String> {
-    let mut response = client
+    let response = client
         .get(release.url.clone())
         .timeout(Duration::from_secs(300))
         .send()
@@ -427,12 +472,7 @@ pub async fn download(
     if !response.status().is_success() {
         return Err("download".into());
     }
-    let total = response.content_length();
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(|_| "download")? {
-        bytes.extend_from_slice(&chunk);
-        progress(chunk.len() as u64, total);
-    }
+    let bytes = read_limited(response, MAX_INSTALLER_BYTES, progress).await?;
     verify(&bytes, &release.signature, PUBLIC_KEY, &release.version)?;
     Ok(bytes)
 }
@@ -603,6 +643,83 @@ fn installed_executable() -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// 指定した生のHTTP応答を1回だけ返すローカルサーバーを起動し、その応答を取得する。
+    async fn serve_once(raw: Vec<u8>) -> reqwest::Response {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 1024];
+            let _ = socket.read(&mut request).await;
+            let _ = socket.write_all(&raw).await;
+            let _ = socket.shutdown().await;
+        });
+        reqwest::get(format!("http://{address}/")).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn bodies_are_bounded_by_declared_length_and_by_streamed_size() {
+        let exact = serve_once(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\nabcd".to_vec(),
+        )
+        .await;
+        assert_eq!(read_limited(exact, 4, |_, _| {}).await.unwrap(), b"abcd");
+        let declared = serve_once(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nabcde".to_vec(),
+        )
+        .await;
+        assert!(read_limited(declared, 4, |_, _| {}).await.is_err());
+        // Content-Length を持たない応答（接続終了まで続く）でも累積サイズで止まる。
+        let streamed =
+            serve_once(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nabcdefgh".to_vec()).await;
+        assert!(read_limited(streamed, 4, |_, _| {}).await.is_err());
+    }
+
+    struct RuntimeHost(crate::runtime::Runtime);
+    impl Host for RuntimeHost {
+        fn prepare(&self) -> bool {
+            self.0.execute("pause", Default::default()).is_ok()
+        }
+        fn cancel(&self) {
+            let _ = self.0.execute("connect", Default::default());
+        }
+    }
+
+    /// 回帰: Host は Runtime::execute（block_on）に届く。Updater のタスク上で直接呼ぶと panic した。
+    #[test]
+    fn host_callbacks_run_from_an_updater_task_without_nesting_runtimes() {
+        let host: Arc<dyn Host> =
+            Arc::new(RuntimeHost(crate::runtime::Runtime::preview_for_test()));
+        let updater_rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+        let keep_alive = host.clone(); // 実アプリでも Runtime は更新タスクより長く生きる
+        let (prepared, cancelled) = updater_rt.block_on(async move {
+            tokio::spawn(async move {
+                let prepared = call_host(&host, |h| h.prepare()).await;
+                let cancelled = call_host(&host, |h| h.cancel()).await;
+                (prepared, cancelled)
+            })
+            .await
+            .expect("host callbacks must not panic the updater task")
+        });
+        assert!(prepared.is_some() && cancelled.is_some());
+        drop(keep_alive);
+    }
+
+    #[test]
+    fn busy_flag_is_released_even_when_the_flow_unwinds() {
+        let busy = Arc::new(AtomicBool::new(true));
+        let guard = BusyGuard(busy.clone());
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let _guard = guard;
+            panic!("simulated failure");
+        }));
+        assert!(!busy.load(Ordering::SeqCst));
+    }
     use super::*;
 
     #[derive(Deserialize)]
