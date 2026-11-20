@@ -24,7 +24,8 @@ async function main() {
   const identity = JSON.parse(await readFile("store/identity.json", "utf8"));
   const mask = value => console.log(`::add-mask::${value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}`);
   const client = createStoreClient({tenantId: process.env.AZURE_AD_TENANT_ID, clientId: process.env.AZURE_AD_APPLICATION_CLIENT_ID, clientSecret: process.env.AZURE_AD_APPLICATION_SECRET}, {mask});
-  const result = await checkStoreConnection(identity, {client});
+  // 審査中の申請(未公開の次の版)があっても、公開済みの版だけを読み取って判定する。
+  const result = await checkStoreConnection(identity, {client, allowPending: true});
   const ready = storeHasPublished(tag, result.versions);
   const message = ready
     ? `Microsoft Store has published ${tag} (x64 ${result.versions.join(", ")}). GitHub release may proceed.`

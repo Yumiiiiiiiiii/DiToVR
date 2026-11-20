@@ -33,6 +33,15 @@ test("wrong identity, first publication and pending submissions fail without rea
   }
 });
 
+test("a pending submission fails the connection check but not the read-only publication gate", async () => {
+  const app = {pendingApplicationSubmission: {id: "456"}};
+  await assert.rejects(checkStoreConnection(identity, fixture({app})));
+  const f = fixture({app});
+  // 審査中の申請があっても、公開済みの版(0.2.1.0)だけを返し、申請の内容は読まない。
+  assert.deepEqual(await checkStoreConnection(identity, {...f, allowPending: true}), {productId: identity.productId, submissionId: "123", versions: ["0.2.1.0"]});
+  assert.deepEqual(f.calls, ["AUTH", `/applications/${identity.productId}`, `/applications/${identity.productId}/submissions/123`]);
+});
+
 test("unpublished, paid and incomplete metadata cannot pass the connection gate", async () => {
   for (const published of [{status: "Certification"}, {pricing: {priceId: "Tier2"}}, {pricing: {priceId: "Free", marketSpecificPricings: {US: "Tier2"}}}, {listings: {}}, {applicationPackages: []}, {applicationPackages: [{architecture: "ARM64", version: "0.2.1.0", fileName: "arm.msix", fileStatus: "Uploaded"}]}, {applicationPackages: [{architecture: "X64", version: "unknown", fileName: "app.msix", fileStatus: "Uploaded"}]}]) {
     await assert.rejects(checkStoreConnection(identity, fixture({published})));

@@ -4,11 +4,11 @@ import {fileURLToPath} from "node:url";
 import {createStoreClient, validateApp} from "./publish-store.mjs";
 
 // This check never creates, uploads, commits or deletes a submission.
-export async function checkStoreConnection(identity, {client}) {
+export async function checkStoreConnection(identity, {client, allowPending = false}) {
   await client.authenticate();
   const root = `/applications/${identity.productId}`;
   const app = await client.request(root);
-  validateApp(app, identity);
+  validateApp(app, identity, {allowPending});
   const id = app.lastPublishedApplicationSubmission.id;
   if (!/^\d+$/.test(id)) throw new Error("Invalid published Store submission ID.");
   const published = await client.request(`${root}/submissions/${id}`);
