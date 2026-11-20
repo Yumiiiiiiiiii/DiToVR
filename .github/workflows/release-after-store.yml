@@ -5,7 +5,7 @@ name: Release after Store publication
 # 正式公開された版のタグだけ release.yml をタグ指定で起動して公開する。
 on:
   schedule:
-    - cron: '17 */3 * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
       release_tag:
