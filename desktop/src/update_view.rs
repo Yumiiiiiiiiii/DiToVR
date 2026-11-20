@@ -7,16 +7,41 @@ use std::sync::{Arc, atomic::AtomicBool};
 pub(super) struct UpdateHost {
     pub runtime: crate::runtime::Runtime,
     pub editing: Arc<AtomicBool>,
+    /// 更新のために受信を止めたとき、止める前に動いていたか。ユーザーが止めていた受信は再開しない。
+    was_running: AtomicBool,
+}
+impl UpdateHost {
+    pub fn new(runtime: crate::runtime::Runtime, editing: Arc<AtomicBool>) -> Self {
+        Self {
+            runtime,
+            editing,
+            was_running: AtomicBool::new(false),
+        }
+    }
 }
 impl Host for UpdateHost {
     fn prepare(&self) -> bool {
-        if self.editing.load(std::sync::atomic::Ordering::SeqCst) {
+        use std::sync::atomic::Ordering::SeqCst;
+        if self.editing.load(SeqCst) {
             return false;
         }
-        self.runtime.execute("pause", Default::default()).is_ok()
+        let running = self.runtime.services_running();
+        let paused = self.runtime.execute("pause", Default::default()).is_ok();
+        if paused {
+            self.was_running.store(running, SeqCst);
+        }
+        paused
+    }
+    fn can_install(&self) -> bool {
+        !self.editing.load(std::sync::atomic::Ordering::SeqCst)
     }
     fn cancel(&self) {
-        let _ = self.runtime.execute("connect", Default::default());
+        if self
+            .was_running
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            let _ = self.runtime.execute("connect", Default::default());
+        }
     }
 }
 
@@ -94,10 +119,10 @@ impl Workspace {
         if migration_failed {
             updater.report_migration_failure();
         }
-        updater.start(Arc::new(UpdateHost {
-            runtime: runtime.clone(),
-            editing: self.editing.clone(),
-        }));
+        updater.start(Arc::new(UpdateHost::new(
+            runtime.clone(),
+            self.editing.clone(),
+        )));
         self.updater = Some(updater);
     }
 
@@ -126,10 +151,10 @@ impl Workspace {
         let toggle_updater = updater.clone();
         let check_updater = updater;
         let auto = s.auto_update;
-        let host = Arc::new(UpdateHost {
-            runtime: self.runtime.clone().expect("runtime"),
-            editing: self.editing.clone(),
-        });
+        let host = Arc::new(UpdateHost::new(
+            self.runtime.clone().expect("runtime"),
+            self.editing.clone(),
+        ));
         self.row(
             "自動アップデート",
             &format!("v{} · {detail}", s.current_version),

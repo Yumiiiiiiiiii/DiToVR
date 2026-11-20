@@ -338,6 +338,11 @@ impl Runtime {
             }
         })
     }
+    /// 受信サービスが動いているか。Call from a worker, never the GUI thread.
+    pub fn services_running(&self) -> bool {
+        self.executor
+            .block_on(async { self.inner.lock().await.services.is_some() })
+    }
     /// Call from a worker, never the GUI thread. Commands serialize against OAuth/settings changes.
     pub fn execute(&self, action: &str, patch: Patch) -> Result<View, String> {
         let result = self.executor.block_on(self.dispatch(action, patch));
@@ -697,6 +702,11 @@ impl Drop for Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stopped_services_report_not_running() {
+        // 更新が受信を止める前の状態を記録するために使う。プレビューは接続しない。
+        assert!(!Runtime::preview_for_test().services_running());
+    }
     #[test]
     fn public_view_and_simulation_do_not_expose_credentials_or_count_as_live() {
         let r = Runtime::at(

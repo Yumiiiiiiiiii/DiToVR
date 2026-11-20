@@ -80,6 +80,10 @@ pub struct Release {
 /// 更新の適用前に呼ぶ確認。未保存の編集中などは false を返し、適用を待つ。
 pub trait Host: Send + Sync + 'static {
     fn prepare(&self) -> bool;
+    /// 受信を止めた後、インストーラーを起動する直前の最終確認。編集が始まっていたら false。
+    fn can_install(&self) -> bool {
+        true
+    }
     fn cancel(&self);
 }
 
@@ -338,30 +342,39 @@ impl Updater {
         .map_err(|_| "更新ファイルのダウンロードまたは署名・バージョン検証に失敗しました。現在のアプリは変更していません。".to_string())?;
         self.mutate(|s| s.phase = Phase::Waiting);
         loop {
-            if !self.snapshot().auto_update {
-                self.mutate(|s| s.phase = Phase::Available);
+            loop {
+                if !self.snapshot().auto_update {
+                    self.mutate(|s| s.phase = Phase::Available);
+                    return Ok(());
+                }
+                if call_host(&host, |h| h.prepare()).await.unwrap_or(false) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+            let apply = {
+                let _write = self.write.lock().unwrap_or_else(|e| e.into_inner());
+                let enabled = self.snapshot().auto_update;
+                self.mutate(|s| {
+                    s.phase = if enabled {
+                        Phase::Installing
+                    } else {
+                        Phase::Available
+                    }
+                });
+                enabled
+            };
+            if !apply {
+                call_host(&host, |h| h.cancel()).await;
                 return Ok(());
             }
-            if call_host(&host, |h| h.prepare()).await.unwrap_or(false) {
+            // 受信を止めている間に設定の編集が始まっていたら、未保存の入力を失わないよう待ち直す。
+            if call_host(&host, |h| h.can_install()).await.unwrap_or(false) {
                 break;
             }
-            tokio::time::sleep(Duration::from_secs(2)).await;
-        }
-        let apply = {
-            let _write = self.write.lock().unwrap_or_else(|e| e.into_inner());
-            let enabled = self.snapshot().auto_update;
-            self.mutate(|s| {
-                s.phase = if enabled {
-                    Phase::Installing
-                } else {
-                    Phase::Available
-                }
-            });
-            enabled
-        };
-        if !apply {
             call_host(&host, |h| h.cancel()).await;
-            return Ok(());
+            self.mutate(|s| s.phase = Phase::Waiting);
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
         let installed = tokio::task::spawn_blocking(move || launch_installer(&bytes)).await;
         if !matches!(installed, Ok(Ok(()))) {

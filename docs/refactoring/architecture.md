@@ -1,6 +1,6 @@
 # 構成（v0.4.1 時点・GPUI 版）
 
-`ARCHITECTURE.md` は Tauri 時代の記述で、現行コードとは一致しない。現行の構成は次のとおり。
+現行の構成は次のとおり。（Git 管理外のローカル `ARCHITECTURE.md` は Tauri 時代の記述だったため、同じ内容に更新した。）
 
 ```
 Discord デスクトップ ─(名前付きパイプ/RPC)→ src/discord/notifier.rs ┐
